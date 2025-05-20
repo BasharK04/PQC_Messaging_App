@@ -1,0 +1,29 @@
+{
+    "configurations": [
+      {
+        "name": "Mac",
+        "includePath": [
+          "${workspaceFolder}/**",
+          "/Users/corinamakhol/SDK/include", // <--- Path to asio.hpp
+          "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1", // For iostream etc.
+          "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include" // General SDK includes
+        ],
+        "browse": { // browse path is less critical for compilation errors but good for symbol navigation
+          "path": [
+            "${workspaceFolder}/**",
+            "/Users/corinamakhol/SDK/include",
+            "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1"
+          ],
+          "limitSymbolsToIncludedHeaders": true
+        },
+        "defines": [
+          "ASIO_STANDALONE"
+        ],
+        "compilerPath": "/usr/bin/clang++",
+        "cStandard": "c17",
+        "cppStandard": "c++17",
+        "intelliSenseMode": "macos-clang-arm64"
+      }
+    ],
+    "version": 4
+  }
