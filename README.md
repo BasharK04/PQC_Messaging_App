@@ -1,23 +1,21 @@
-E2EE Messaging (University Project)
+E2EE Messaging
 
-A learning-focused, one-on-one end-to-end encrypted chat with:
+A one-on-one end-to-end encrypted chat with:
 - A reusable core engine (handshake + message crypto)
-- A minimal WebSocket relay server (rooms)
+- A WebSocket relay server
 - A console client that handshakes E2E over the relay
 - TCP console tools for local development
-
-This repo emphasizes clarity over production polish.
 
 Build
 
 Prereqs (macOS/Linux): CMake, a C++17 compiler, OpenSSL, Boost.System, Protobuf, liboqs.
 
-Option A (one-liner):
+Option A:
 ```
 ./scripts/build.sh   # uses GUI=OFF, TYPE=RelWithDebInfo, JOBS=8 by default
 ```
 
-Option B (Makefile):
+Option B:
 ```
 make           # builds CLI + backend
 make gui       # builds GUI too (if Qt links on your OS)
@@ -51,9 +49,9 @@ Quickstart (Local)
 
 Type messages in either client.
 
-Deploy the Relay (DigitalOcean)
+Deploy the Relay (Hosted on DigitalOcean)
 
-On your droplet:
+On droplet:
 ```
 sudo apt-get update
 sudo apt-get install -y build-essential cmake libboost-system-dev libssl-dev protobuf-compiler libprotobuf-dev
@@ -94,11 +92,8 @@ What to Improve (Future Work)
 - Replay protection and message authentication metadata.
 - Stronger identity management (per-relay scoping, import/export).
 
-License
 
-See LICENSE.
-
-Production-ish Notes
+Production Notes
 
 - Systemd unit: see `deploy/relay_server.service`. Copy to `/etc/systemd/system/relay_server@youruser.service`, set the `WorkingDirectory` and `ExecStart` paths for your environment, then:
   - `sudo systemctl daemon-reload`
@@ -111,14 +106,14 @@ GUI Status
 - The Qt GUI target is currently disabled by default on macOS due to an OpenGL/AGL link issue. The backend and CLI are complete and recommended for demos.
 - To attempt building the GUI: install Qt6 and run `cmake -S . -B build -DBUILD_GUI=ON`. On Linux this usually links fine; on macOS you may need to adjust your Qt/OpenGL setup.
 
-Building (recap)
+Build
 
 ```
 cmake -S . -B build -DBUILD_GUI=OFF
 cmake --build build -j
 ```
 
-Run the loopback test to sanity-check crypto:
+Run loopback test to check crypto:
 
 ```
 ./build/engine_loopback_test
