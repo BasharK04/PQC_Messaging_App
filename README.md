@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+<<<<<<< HEAD >>>>>>>>
 E2EE Messaging
 
 A one-on-one end-to-end encrypted chat with:
