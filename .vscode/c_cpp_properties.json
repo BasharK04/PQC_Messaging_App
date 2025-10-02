@@ -1,29 +1,35 @@
 {
     "configurations": [
-      {
-        "name": "Mac",
-        "includePath": [
-          "${workspaceFolder}/**",
-          "/Users/corinamakhol/SDK/include", // <--- Path to asio.hpp
-          "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1", // For iostream etc.
-          "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include" // General SDK includes
-        ],
-        "browse": { // browse path is less critical for compilation errors but good for symbol navigation
-          "path": [
-            "${workspaceFolder}/**",
-            "/Users/corinamakhol/SDK/include",
-            "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1"
-          ],
-          "limitSymbolsToIncludedHeaders": true
-        },
-        "defines": [
-          "ASIO_STANDALONE"
-        ],
-        "compilerPath": "/usr/bin/clang++",
-        "cStandard": "c17",
-        "cppStandard": "c++17",
-        "intelliSenseMode": "macos-clang-arm64"
-      }
+        {
+            "name": "Mac",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/build",
+                "/opt/homebrew/include",
+                "/opt/homebrew/opt/qt/include",
+                "/opt/homebrew/opt/qt/lib/QtWidgets.framework/Headers",
+                "/opt/homebrew/opt/qt/lib/QtNetwork.framework/Headers",
+                "/opt/homebrew/opt/qt/lib/QtWebSockets.framework/Headers",
+                "/opt/homebrew/Cellar/protobuf/29.3_1/include",
+                "/opt/homebrew/Cellar/abseil/20250127.1/include",
+                "/opt/homebrew/Cellar/boost/1.87.0/include",
+                "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1",
+                "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/*/include",
+                "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include"
+            ],
+            "defines": [],
+            "macFrameworkPath": [
+                "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "macos-clang-arm64",
+            "compilerArgs": [
+                "-std=c++17"
+            ]
+        }
     ],
     "version": 4
-  }
+}

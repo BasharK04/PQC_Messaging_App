@@ -1,0 +1,2 @@
+/usr/bin/ar qc libpqc_kem.a CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o CMakeFiles/pqc_kem.dir/hkdf.cpp.o
+/usr/bin/ranlib libpqc_kem.a

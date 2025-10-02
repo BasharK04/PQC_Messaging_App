@@ -1,0 +1,15 @@
+# Simple Caddyfile for TLS termination and WebSocket reverse proxy
+
+# Replace chat.example.com with your domain
+chat.example.com {
+  encode gzip
+
+  @ws path /ws*
+  reverse_proxy @ws 127.0.0.1:8080
+
+  # Health pass-through (optional)
+  handle_path /health* {
+    reverse_proxy 127.0.0.1:8080
+  }
+}
+

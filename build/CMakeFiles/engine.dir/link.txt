@@ -1,0 +1,2 @@
+/usr/bin/ar qc libengine.a CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o CMakeFiles/engine.dir/tcp_transport.cpp.o CMakeFiles/engine.dir/connection_engine.cpp.o CMakeFiles/engine.dir/beast_ws_transport.cpp.o
+/usr/bin/ranlib libengine.a

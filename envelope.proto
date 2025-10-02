@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+message Envelope {
+  uint32 version          = 1;   // start at 1
+  string to_username      = 2;   // routing hint (unused for now)
+  bytes  sender_pubkey    = 3;   // Ed25519 pubkey (Phase 5; empty for now)
+  bytes  payload_e2e      = 4;   // serialized ChatMessage (which already holds nonce + ciphertext)
+  int64  client_timestamp = 5;   // sender wall clock
+}

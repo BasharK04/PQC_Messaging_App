@@ -1,0 +1,17 @@
+[Unit]
+Description=E2EE relay server (WebSocket forwarder)
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/e2ee
+ExecStart=/home/%i/e2ee/build/relay_server 8080
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
