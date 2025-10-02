@@ -1,8 +1,6 @@
-<<<<<<< HEAD
 E2EE Messaging
 =======
 # E2EE Messaging
->>>>>>> 8e8fdc1 (readme update)
 
 End-to-end encrypted 1:1 chat built in C++17 as a learning project. It runs locally or against a small relay server (tested on a $6/mo DigitalOcean droplet).
 
