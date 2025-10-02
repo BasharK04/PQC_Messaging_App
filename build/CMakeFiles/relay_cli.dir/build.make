@@ -76,15 +76,15 @@ CMakeFiles/relay_cli.dir/relay_cli.cpp.o: CMakeFiles/relay_cli.dir/flags.make
 CMakeFiles/relay_cli.dir/relay_cli.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/relay_cli.cpp
 CMakeFiles/relay_cli.dir/relay_cli.cpp.o: CMakeFiles/relay_cli.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/relay_cli.dir/relay_cli.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/relay_cli.dir/relay_cli.cpp.o -MF CMakeFiles/relay_cli.dir/relay_cli.cpp.o.d -o CMakeFiles/relay_cli.dir/relay_cli.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_cli.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/relay_cli.dir/relay_cli.cpp.o -MF CMakeFiles/relay_cli.dir/relay_cli.cpp.o.d -o CMakeFiles/relay_cli.dir/relay_cli.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_cli.cpp"
 
 CMakeFiles/relay_cli.dir/relay_cli.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/relay_cli.dir/relay_cli.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_cli.cpp" > CMakeFiles/relay_cli.dir/relay_cli.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_cli.cpp" > CMakeFiles/relay_cli.dir/relay_cli.cpp.i
 
 CMakeFiles/relay_cli.dir/relay_cli.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/relay_cli.dir/relay_cli.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_cli.cpp" -o CMakeFiles/relay_cli.dir/relay_cli.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_cli.cpp" -o CMakeFiles/relay_cli.dir/relay_cli.cpp.s
 
 # Object files for target relay_cli
 relay_cli_OBJECTS = \

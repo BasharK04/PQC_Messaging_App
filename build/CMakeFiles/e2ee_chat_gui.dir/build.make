@@ -82,71 +82,71 @@ CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o: CMake
 CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o: e2ee_chat_gui_autogen/mocs_compilation.cpp
 CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o: CMakeFiles/e2ee_chat_gui.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/e2ee_chat_gui_autogen/mocs_compilation.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/e2ee_chat_gui_autogen/mocs_compilation.cpp"
 
 CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/e2ee_chat_gui_autogen/mocs_compilation.cpp" > CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/e2ee_chat_gui_autogen/mocs_compilation.cpp" > CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.i
 
 CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/e2ee_chat_gui_autogen/mocs_compilation.cpp" -o CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/e2ee_chat_gui_autogen/mocs_compilation.cpp" -o CMakeFiles/e2ee_chat_gui.dir/e2ee_chat_gui_autogen/mocs_compilation.cpp.s
 
 CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o: CMakeFiles/e2ee_chat_gui.dir/flags.make
 CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/gui/main.cpp
 CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o: CMakeFiles/e2ee_chat_gui.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/main.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/main.cpp"
 
 CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/main.cpp" > CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/main.cpp" > CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.i
 
 CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/main.cpp" -o CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/main.cpp" -o CMakeFiles/e2ee_chat_gui.dir/gui/main.cpp.s
 
 CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o: CMakeFiles/e2ee_chat_gui.dir/flags.make
 CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/gui/MainWindow.cpp
 CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o: CMakeFiles/e2ee_chat_gui.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/MainWindow.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/MainWindow.cpp"
 
 CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/MainWindow.cpp" > CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/MainWindow.cpp" > CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.i
 
 CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/MainWindow.cpp" -o CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/MainWindow.cpp" -o CMakeFiles/e2ee_chat_gui.dir/gui/MainWindow.cpp.s
 
 CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o: CMakeFiles/e2ee_chat_gui.dir/flags.make
 CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/gui/EngineWorker.cpp
 CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o: CMakeFiles/e2ee_chat_gui.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/EngineWorker.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/EngineWorker.cpp"
 
 CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/EngineWorker.cpp" > CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/EngineWorker.cpp" > CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.i
 
 CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/EngineWorker.cpp" -o CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/gui/EngineWorker.cpp" -o CMakeFiles/e2ee_chat_gui.dir/gui/EngineWorker.cpp.s
 
 CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o: CMakeFiles/e2ee_chat_gui.dir/flags.make
 CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/ws_transport.cpp
 CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o: CMakeFiles/e2ee_chat_gui.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/ws_transport.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o -MF CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o.d -o CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/ws_transport.cpp"
 
 CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/ws_transport.cpp" > CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/ws_transport.cpp" > CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.i
 
 CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/ws_transport.cpp" -o CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/ws_transport.cpp" -o CMakeFiles/e2ee_chat_gui.dir/ws_transport.cpp.s
 
 # Object files for target e2ee_chat_gui
 e2ee_chat_gui_OBJECTS = \

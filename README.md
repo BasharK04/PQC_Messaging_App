@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 E2EE Messaging
 
 A one-on-one end-to-end encrypted chat with:
@@ -11,10 +12,29 @@ Build
 Prereqs (macOS/Linux): CMake, a C++17 compiler, OpenSSL, Boost.System, Protobuf, liboqs.
 
 Option A:
-```
-./scripts/build.sh   # uses GUI=OFF, TYPE=RelWithDebInfo, JOBS=8 by default
-```
+=======
+# E2EE Messaging – notes for future me (and interviewers)
 
+This is the playground where I’m learning C++17, Qt, and end‑to‑end encryption. It currently does 1:1 chat with Kyber + Ed25519, a tiny relay, and a CLI client. Not production grade, but enough to fire up two terminals (or machines) and see encrypted messages bouncing around.
+
+## What’s in the repo
+- `connection_engine.*` – loads/creates an identity file (`client.id`), runs the Kyber handshake, derives the AES‑GCM key, encrypts/decrypts protobuf messages.
+- `relay_server.cpp` – WebSocket fan‑out by room (boost::beast, no storage, no auth).
+- `relay_cli` – console chat over the relay, TOFU pinning stored in `pins.txt`.
+- `pqc_client/pqc_server` – TCP console toys I used before switching to the relay.
+- `gui/` – Qt GUI; works great on Linux, macOS still needs that OpenGL/AGL fix.
+
+## Building it (pick one)
+>>>>>>> 0d8e359 (Remove generated build directory)
+```
+./scripts/build.sh          # default: GUI off, RelWithDebInfo
+make                        # same as above
+make gui                    # if Qt links on your box
+make run-relay-fast PORT=8080   # just run the relay, no rebuild
+```
+You’ll need a C++17 compiler, CMake, Boost, OpenSSL, Protobuf, liboqs. On macOS: Homebrew can install all of them. On Ubuntu: see `scripts/install_deps_ubuntu.sh` (liboqs still comes from source).
+
+<<<<<<< HEAD
 Option B:
 ```
 make           # builds CLI + backend
@@ -52,34 +72,42 @@ Type messages in either client.
 Deploy the Relay (Hosted on DigitalOcean)
 
 On droplet:
+=======
+## Quick local test
+1. Terminal A: `./build/relay_server 8080`
+2. Terminal B: `./build/relay_cli --host --relay http://127.0.0.1:8080 --room test --password pass123`
+3. Terminal C: same command but `--connect`
+You’ll see the peer fingerprint once, then any text you type shows up on the other side.
+
+## Running it on my droplet (QuantRelay)
+>>>>>>> 0d8e359 (Remove generated build directory)
 ```
+ssh root@174.138.91.64
 sudo apt-get update
 sudo apt-get install -y build-essential cmake libboost-system-dev libssl-dev protobuf-compiler libprotobuf-dev
-# clone this repo, then
+# build liboqs from source (see scripts/install_deps_ubuntu.sh)
 cmake -S . -B build -DBUILD_GUI=OFF
-cmake --build build -j
-sudo ufw allow 8080/tcp
-./build/relay_server 8080
+cmake --build build -j1            # small droplet, easy on RAM
+sudo systemctl enable --now relay_server   # using deploy/relay_server.service
 ```
-Use a terminal multiplexer (tmux) or create a systemd unit to keep it running.
-
-On your machine:
+From my laptop I just run:
 ```
-./build/relay_cli host    http://<droplet_ip>:8080 alice pass123
-./build/relay_cli connect http://<droplet_ip>:8080 alice pass123
+./build/relay_cli --host    --relay http://174.138.91.64:8080 --room corina --password pass123
+./build/relay_cli --connect --relay http://174.138.91.64:8080 --room corina --password pass123
 ```
 
-Architecture
+## Security-ish notes
+- Identity file (`client.id`) is AES-GCM encrypted, key derived with PBKDF2-HMAC-SHA256 (200k iterations, random salt).
+- First handshake per `<relay-host>#<room>` pins the peer fingerprint in `pins.txt`. If the peer key changes, the client bails and tells you to delete the line if you really want to trust the new key.
+- Relay only forwards bytes; all message contents stay E2E encrypted.
 
-- Core: connection_engine.{h,cpp}
-  - Identity (Ed25519 keystore), Kyber KEM handshake, HKDF(SHA-256) to AES-256-GCM session key, serialize/deserialize protobuf Envelope/ChatMessage.
-- Transports:
-  - TCP: tcp_transport.* (dev tools)
-  - WebSocket (CLI): beast_ws_transport.* (Boost.Beast)
-  - WebSocket (GUI): ws_transport.* (Qt, optional GUI currently disabled)
-- Relay: relay_server.cpp (rooms, broadcasts binary frames)
-- Protocol constants: protocol.h
+## Stuff I still want to add
+- [ ] TLS + Caddy in front of the relay so clients can use `https://mydomain` instead of `http://ip:port`.
+- [ ] Directory service: register/login, username search, store public keys, share “presence” (relay/room). Basically remove the “agree out of band” step.
+- [ ] (Optional) GUI polish on macOS once I swap out the Qt build that drags in AGL.
+- [ ] Maybe a “make release” that tars up `relay_server`, `relay_cli`, and the docs.
 
+<<<<<<< HEAD
 Security Notes
 
 - Identity is stored encrypted with PBKDF2(AES-GCM). Protect your password.
@@ -118,3 +146,10 @@ Run loopback test to check crypto:
 ```
 ./build/engine_loopback_test
 ```
+=======
+## If you’re skimming for an interview
+- Shows Kyber + Ed25519 handshake, HKDF to AES-GCM, protobuf transport.
+- Boost::beast WebSocket relay, CLI client, optional Qt GUI.
+- Deployable on a $6/mo DO droplet (systemd unit + ufw rules).
+- Clear next steps (directory service, TLS proxy) to cross the finish line.
+>>>>>>> 0d8e359 (Remove generated build directory)

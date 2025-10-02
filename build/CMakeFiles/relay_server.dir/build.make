@@ -76,15 +76,15 @@ CMakeFiles/relay_server.dir/relay_server.cpp.o: CMakeFiles/relay_server.dir/flag
 CMakeFiles/relay_server.dir/relay_server.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/relay_server.cpp
 CMakeFiles/relay_server.dir/relay_server.cpp.o: CMakeFiles/relay_server.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/relay_server.dir/relay_server.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/relay_server.dir/relay_server.cpp.o -MF CMakeFiles/relay_server.dir/relay_server.cpp.o.d -o CMakeFiles/relay_server.dir/relay_server.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_server.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/relay_server.dir/relay_server.cpp.o -MF CMakeFiles/relay_server.dir/relay_server.cpp.o.d -o CMakeFiles/relay_server.dir/relay_server.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_server.cpp"
 
 CMakeFiles/relay_server.dir/relay_server.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/relay_server.dir/relay_server.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_server.cpp" > CMakeFiles/relay_server.dir/relay_server.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_server.cpp" > CMakeFiles/relay_server.dir/relay_server.cpp.i
 
 CMakeFiles/relay_server.dir/relay_server.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/relay_server.dir/relay_server.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_server.cpp" -o CMakeFiles/relay_server.dir/relay_server.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/relay_server.cpp" -o CMakeFiles/relay_server.dir/relay_server.cpp.s
 
 # Object files for target relay_server
 relay_server_OBJECTS = \

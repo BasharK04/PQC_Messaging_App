@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
+#include <cstdint>
 
 // Minimal blocking WebSocket client built on Boost.Beast for CLI usage.
 class BeastWebSocketTransport {
@@ -18,4 +19,3 @@ private:
   struct Impl;
   Impl* impl_ = nullptr;
 };
-

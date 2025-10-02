@@ -76,15 +76,15 @@ CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o: CMakeFiles
 CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/tools/engine_loopback_test.cpp
 CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o: CMakeFiles/engine_loopback_test.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o -MF CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o.d -o CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tools/engine_loopback_test.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o -MF CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o.d -o CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tools/engine_loopback_test.cpp"
 
 CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tools/engine_loopback_test.cpp" > CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tools/engine_loopback_test.cpp" > CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.i
 
 CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tools/engine_loopback_test.cpp" -o CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tools/engine_loopback_test.cpp" -o CMakeFiles/engine_loopback_test.dir/tools/engine_loopback_test.cpp.s
 
 # Object files for target engine_loopback_test
 engine_loopback_test_OBJECTS = \

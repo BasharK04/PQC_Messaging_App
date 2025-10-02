@@ -106,57 +106,57 @@ CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o: CMa
 CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o: messages_proto_autogen/mocs_compilation.cpp
 CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o: CMakeFiles/messages_proto.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o -MF CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages_proto_autogen/mocs_compilation.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o -MF CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages_proto_autogen/mocs_compilation.cpp"
 
 CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages_proto_autogen/mocs_compilation.cpp" > CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages_proto_autogen/mocs_compilation.cpp" > CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.i
 
 CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages_proto_autogen/mocs_compilation.cpp" -o CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages_proto_autogen/mocs_compilation.cpp" -o CMakeFiles/messages_proto.dir/messages_proto_autogen/mocs_compilation.cpp.s
 
 CMakeFiles/messages_proto.dir/messages.pb.cc.o: CMakeFiles/messages_proto.dir/flags.make
 CMakeFiles/messages_proto.dir/messages.pb.cc.o: messages.pb.cc
 CMakeFiles/messages_proto.dir/messages.pb.cc.o: CMakeFiles/messages_proto.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/messages_proto.dir/messages.pb.cc.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/messages_proto.dir/messages.pb.cc.o -MF CMakeFiles/messages_proto.dir/messages.pb.cc.o.d -o CMakeFiles/messages_proto.dir/messages.pb.cc.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages.pb.cc"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/messages_proto.dir/messages.pb.cc.o -MF CMakeFiles/messages_proto.dir/messages.pb.cc.o.d -o CMakeFiles/messages_proto.dir/messages.pb.cc.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages.pb.cc"
 
 CMakeFiles/messages_proto.dir/messages.pb.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/messages_proto.dir/messages.pb.cc.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages.pb.cc" > CMakeFiles/messages_proto.dir/messages.pb.cc.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages.pb.cc" > CMakeFiles/messages_proto.dir/messages.pb.cc.i
 
 CMakeFiles/messages_proto.dir/messages.pb.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/messages_proto.dir/messages.pb.cc.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages.pb.cc" -o CMakeFiles/messages_proto.dir/messages.pb.cc.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/messages.pb.cc" -o CMakeFiles/messages_proto.dir/messages.pb.cc.s
 
 CMakeFiles/messages_proto.dir/envelope.pb.cc.o: CMakeFiles/messages_proto.dir/flags.make
 CMakeFiles/messages_proto.dir/envelope.pb.cc.o: envelope.pb.cc
 CMakeFiles/messages_proto.dir/envelope.pb.cc.o: CMakeFiles/messages_proto.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/messages_proto.dir/envelope.pb.cc.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/messages_proto.dir/envelope.pb.cc.o -MF CMakeFiles/messages_proto.dir/envelope.pb.cc.o.d -o CMakeFiles/messages_proto.dir/envelope.pb.cc.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/envelope.pb.cc"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/messages_proto.dir/envelope.pb.cc.o -MF CMakeFiles/messages_proto.dir/envelope.pb.cc.o.d -o CMakeFiles/messages_proto.dir/envelope.pb.cc.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/envelope.pb.cc"
 
 CMakeFiles/messages_proto.dir/envelope.pb.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/messages_proto.dir/envelope.pb.cc.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/envelope.pb.cc" > CMakeFiles/messages_proto.dir/envelope.pb.cc.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/envelope.pb.cc" > CMakeFiles/messages_proto.dir/envelope.pb.cc.i
 
 CMakeFiles/messages_proto.dir/envelope.pb.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/messages_proto.dir/envelope.pb.cc.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/envelope.pb.cc" -o CMakeFiles/messages_proto.dir/envelope.pb.cc.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/envelope.pb.cc" -o CMakeFiles/messages_proto.dir/envelope.pb.cc.s
 
 CMakeFiles/messages_proto.dir/handshake.pb.cc.o: CMakeFiles/messages_proto.dir/flags.make
 CMakeFiles/messages_proto.dir/handshake.pb.cc.o: handshake.pb.cc
 CMakeFiles/messages_proto.dir/handshake.pb.cc.o: CMakeFiles/messages_proto.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/messages_proto.dir/handshake.pb.cc.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/messages_proto.dir/handshake.pb.cc.o -MF CMakeFiles/messages_proto.dir/handshake.pb.cc.o.d -o CMakeFiles/messages_proto.dir/handshake.pb.cc.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/handshake.pb.cc"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/messages_proto.dir/handshake.pb.cc.o -MF CMakeFiles/messages_proto.dir/handshake.pb.cc.o.d -o CMakeFiles/messages_proto.dir/handshake.pb.cc.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/handshake.pb.cc"
 
 CMakeFiles/messages_proto.dir/handshake.pb.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/messages_proto.dir/handshake.pb.cc.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/handshake.pb.cc" > CMakeFiles/messages_proto.dir/handshake.pb.cc.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/handshake.pb.cc" > CMakeFiles/messages_proto.dir/handshake.pb.cc.i
 
 CMakeFiles/messages_proto.dir/handshake.pb.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/messages_proto.dir/handshake.pb.cc.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/handshake.pb.cc" -o CMakeFiles/messages_proto.dir/handshake.pb.cc.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/handshake.pb.cc" -o CMakeFiles/messages_proto.dir/handshake.pb.cc.s
 
 # Object files for target messages_proto
 messages_proto_OBJECTS = \

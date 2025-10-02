@@ -82,29 +82,29 @@ CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o: CMakeFiles/iden
 CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o: identity_autogen/mocs_compilation.cpp
 CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o: CMakeFiles/identity.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o -MF CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/identity_autogen/mocs_compilation.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o -MF CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/identity_autogen/mocs_compilation.cpp"
 
 CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/identity_autogen/mocs_compilation.cpp" > CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/identity_autogen/mocs_compilation.cpp" > CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.i
 
 CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/identity_autogen/mocs_compilation.cpp" -o CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/identity_autogen/mocs_compilation.cpp" -o CMakeFiles/identity.dir/identity_autogen/mocs_compilation.cpp.s
 
 CMakeFiles/identity.dir/identity.cpp.o: CMakeFiles/identity.dir/flags.make
 CMakeFiles/identity.dir/identity.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/identity.cpp
 CMakeFiles/identity.dir/identity.cpp.o: CMakeFiles/identity.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/identity.dir/identity.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/identity.dir/identity.cpp.o -MF CMakeFiles/identity.dir/identity.cpp.o.d -o CMakeFiles/identity.dir/identity.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/identity.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/identity.dir/identity.cpp.o -MF CMakeFiles/identity.dir/identity.cpp.o.d -o CMakeFiles/identity.dir/identity.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/identity.cpp"
 
 CMakeFiles/identity.dir/identity.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/identity.dir/identity.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/identity.cpp" > CMakeFiles/identity.dir/identity.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/identity.cpp" > CMakeFiles/identity.dir/identity.cpp.i
 
 CMakeFiles/identity.dir/identity.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/identity.dir/identity.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/identity.cpp" -o CMakeFiles/identity.dir/identity.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/identity.cpp" -o CMakeFiles/identity.dir/identity.cpp.s
 
 # Object files for target identity
 identity_OBJECTS = \

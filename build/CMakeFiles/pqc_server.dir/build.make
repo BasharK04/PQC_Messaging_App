@@ -76,15 +76,15 @@ CMakeFiles/pqc_server.dir/server.cpp.o: CMakeFiles/pqc_server.dir/flags.make
 CMakeFiles/pqc_server.dir/server.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/server.cpp
 CMakeFiles/pqc_server.dir/server.cpp.o: CMakeFiles/pqc_server.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/pqc_server.dir/server.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pqc_server.dir/server.cpp.o -MF CMakeFiles/pqc_server.dir/server.cpp.o.d -o CMakeFiles/pqc_server.dir/server.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/server.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pqc_server.dir/server.cpp.o -MF CMakeFiles/pqc_server.dir/server.cpp.o.d -o CMakeFiles/pqc_server.dir/server.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/server.cpp"
 
 CMakeFiles/pqc_server.dir/server.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/pqc_server.dir/server.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/server.cpp" > CMakeFiles/pqc_server.dir/server.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/server.cpp" > CMakeFiles/pqc_server.dir/server.cpp.i
 
 CMakeFiles/pqc_server.dir/server.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/pqc_server.dir/server.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/server.cpp" -o CMakeFiles/pqc_server.dir/server.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/server.cpp" -o CMakeFiles/pqc_server.dir/server.cpp.s
 
 # Object files for target pqc_server
 pqc_server_OBJECTS = \

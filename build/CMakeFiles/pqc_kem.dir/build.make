@@ -82,43 +82,43 @@ CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o: CMakeFiles/pqc_ke
 CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o: pqc_kem_autogen/mocs_compilation.cpp
 CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o: CMakeFiles/pqc_kem.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o -MF CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/pqc_kem_autogen/mocs_compilation.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o -MF CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/pqc_kem_autogen/mocs_compilation.cpp"
 
 CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/pqc_kem_autogen/mocs_compilation.cpp" > CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/pqc_kem_autogen/mocs_compilation.cpp" > CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.i
 
 CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/pqc_kem_autogen/mocs_compilation.cpp" -o CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/pqc_kem_autogen/mocs_compilation.cpp" -o CMakeFiles/pqc_kem.dir/pqc_kem_autogen/mocs_compilation.cpp.s
 
 CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o: CMakeFiles/pqc_kem.dir/flags.make
 CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/kem_kyber.cpp
 CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o: CMakeFiles/pqc_kem.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o -MF CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o.d -o CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/kem_kyber.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o -MF CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o.d -o CMakeFiles/pqc_kem.dir/kem_kyber.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/kem_kyber.cpp"
 
 CMakeFiles/pqc_kem.dir/kem_kyber.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/pqc_kem.dir/kem_kyber.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/kem_kyber.cpp" > CMakeFiles/pqc_kem.dir/kem_kyber.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/kem_kyber.cpp" > CMakeFiles/pqc_kem.dir/kem_kyber.cpp.i
 
 CMakeFiles/pqc_kem.dir/kem_kyber.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/pqc_kem.dir/kem_kyber.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/kem_kyber.cpp" -o CMakeFiles/pqc_kem.dir/kem_kyber.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/kem_kyber.cpp" -o CMakeFiles/pqc_kem.dir/kem_kyber.cpp.s
 
 CMakeFiles/pqc_kem.dir/hkdf.cpp.o: CMakeFiles/pqc_kem.dir/flags.make
 CMakeFiles/pqc_kem.dir/hkdf.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/hkdf.cpp
 CMakeFiles/pqc_kem.dir/hkdf.cpp.o: CMakeFiles/pqc_kem.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/pqc_kem.dir/hkdf.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pqc_kem.dir/hkdf.cpp.o -MF CMakeFiles/pqc_kem.dir/hkdf.cpp.o.d -o CMakeFiles/pqc_kem.dir/hkdf.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/hkdf.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/pqc_kem.dir/hkdf.cpp.o -MF CMakeFiles/pqc_kem.dir/hkdf.cpp.o.d -o CMakeFiles/pqc_kem.dir/hkdf.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/hkdf.cpp"
 
 CMakeFiles/pqc_kem.dir/hkdf.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/pqc_kem.dir/hkdf.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/hkdf.cpp" > CMakeFiles/pqc_kem.dir/hkdf.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/hkdf.cpp" > CMakeFiles/pqc_kem.dir/hkdf.cpp.i
 
 CMakeFiles/pqc_kem.dir/hkdf.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/pqc_kem.dir/hkdf.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/hkdf.cpp" -o CMakeFiles/pqc_kem.dir/hkdf.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/hkdf.cpp" -o CMakeFiles/pqc_kem.dir/hkdf.cpp.s
 
 # Object files for target pqc_kem
 pqc_kem_OBJECTS = \

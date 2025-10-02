@@ -82,57 +82,57 @@ CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o: CMakeFiles/engine.d
 CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o: engine_autogen/mocs_compilation.cpp
 CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o: CMakeFiles/engine.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o -MF CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/engine_autogen/mocs_compilation.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o -MF CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o.d -o CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/engine_autogen/mocs_compilation.cpp"
 
 CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/engine_autogen/mocs_compilation.cpp" > CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/engine_autogen/mocs_compilation.cpp" > CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.i
 
 CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/engine_autogen/mocs_compilation.cpp" -o CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/engine_autogen/mocs_compilation.cpp" -o CMakeFiles/engine.dir/engine_autogen/mocs_compilation.cpp.s
 
 CMakeFiles/engine.dir/tcp_transport.cpp.o: CMakeFiles/engine.dir/flags.make
 CMakeFiles/engine.dir/tcp_transport.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/tcp_transport.cpp
 CMakeFiles/engine.dir/tcp_transport.cpp.o: CMakeFiles/engine.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/engine.dir/tcp_transport.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine.dir/tcp_transport.cpp.o -MF CMakeFiles/engine.dir/tcp_transport.cpp.o.d -o CMakeFiles/engine.dir/tcp_transport.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tcp_transport.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine.dir/tcp_transport.cpp.o -MF CMakeFiles/engine.dir/tcp_transport.cpp.o.d -o CMakeFiles/engine.dir/tcp_transport.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tcp_transport.cpp"
 
 CMakeFiles/engine.dir/tcp_transport.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/engine.dir/tcp_transport.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tcp_transport.cpp" > CMakeFiles/engine.dir/tcp_transport.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tcp_transport.cpp" > CMakeFiles/engine.dir/tcp_transport.cpp.i
 
 CMakeFiles/engine.dir/tcp_transport.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/engine.dir/tcp_transport.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tcp_transport.cpp" -o CMakeFiles/engine.dir/tcp_transport.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/tcp_transport.cpp" -o CMakeFiles/engine.dir/tcp_transport.cpp.s
 
 CMakeFiles/engine.dir/connection_engine.cpp.o: CMakeFiles/engine.dir/flags.make
 CMakeFiles/engine.dir/connection_engine.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/connection_engine.cpp
 CMakeFiles/engine.dir/connection_engine.cpp.o: CMakeFiles/engine.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/engine.dir/connection_engine.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine.dir/connection_engine.cpp.o -MF CMakeFiles/engine.dir/connection_engine.cpp.o.d -o CMakeFiles/engine.dir/connection_engine.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/connection_engine.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine.dir/connection_engine.cpp.o -MF CMakeFiles/engine.dir/connection_engine.cpp.o.d -o CMakeFiles/engine.dir/connection_engine.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/connection_engine.cpp"
 
 CMakeFiles/engine.dir/connection_engine.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/engine.dir/connection_engine.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/connection_engine.cpp" > CMakeFiles/engine.dir/connection_engine.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/connection_engine.cpp" > CMakeFiles/engine.dir/connection_engine.cpp.i
 
 CMakeFiles/engine.dir/connection_engine.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/engine.dir/connection_engine.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/connection_engine.cpp" -o CMakeFiles/engine.dir/connection_engine.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/connection_engine.cpp" -o CMakeFiles/engine.dir/connection_engine.cpp.s
 
 CMakeFiles/engine.dir/beast_ws_transport.cpp.o: CMakeFiles/engine.dir/flags.make
 CMakeFiles/engine.dir/beast_ws_transport.cpp.o: /Users/corinamakhol/Desktop/Everything/Projects/E2EE\ Messaging/beast_ws_transport.cpp
 CMakeFiles/engine.dir/beast_ws_transport.cpp.o: CMakeFiles/engine.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir="/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/build/CMakeFiles" --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/engine.dir/beast_ws_transport.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine.dir/beast_ws_transport.cpp.o -MF CMakeFiles/engine.dir/beast_ws_transport.cpp.o.d -o CMakeFiles/engine.dir/beast_ws_transport.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/beast_ws_transport.cpp"
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/engine.dir/beast_ws_transport.cpp.o -MF CMakeFiles/engine.dir/beast_ws_transport.cpp.o.d -o CMakeFiles/engine.dir/beast_ws_transport.cpp.o -c "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/beast_ws_transport.cpp"
 
 CMakeFiles/engine.dir/beast_ws_transport.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/engine.dir/beast_ws_transport.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/beast_ws_transport.cpp" > CMakeFiles/engine.dir/beast_ws_transport.cpp.i
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/beast_ws_transport.cpp" > CMakeFiles/engine.dir/beast_ws_transport.cpp.i
 
 CMakeFiles/engine.dir/beast_ws_transport.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/engine.dir/beast_ws_transport.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/beast_ws_transport.cpp" -o CMakeFiles/engine.dir/beast_ws_transport.cpp.s
+	/usr/bin/clang++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S "/Users/corinamakhol/Desktop/Everything/Projects/E2EE Messaging/beast_ws_transport.cpp" -o CMakeFiles/engine.dir/beast_ws_transport.cpp.s
 
 # Object files for target engine
 engine_OBJECTS = \
