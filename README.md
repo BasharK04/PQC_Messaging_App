@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 
-# E2EE Messaging
-=======
-<<<<<<< HEAD
 E2EE Messaging
 =======
 # E2EE Messaging
