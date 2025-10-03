@@ -1,7 +1,5 @@
-// Minimal WebSocket relay: clients connect to /ws?room=<name>
-// All binary frames from one client are forwarded to others in the same room.
-// Plus a simple GET /health endpoint.
-// Build target: relay_server
+// WebSocket relay: clients connect to /ws?room=<name> and frames fan out to the
+// other participants in that room. A GET /health endpoint returns "ok".
 
 #include <iostream>
 #include <string>

@@ -1,5 +1,5 @@
 #include "identity.h"
-#include "crypto.h"  // AESGCMCrypto
+#include "crypto.h"
 #include <stdexcept>
 #include <fstream>
 #include <cstring>
@@ -59,19 +59,15 @@ std::vector<uint8_t> IdentityStore::pbkdf2_sha256(const std::string& password,
 }
 
 void IdentityStore::create_profile(const std::string& path, const std::string& password, Identity& out) {
-  // 1) generate ed25519
   gen_ed25519(out);
 
-  // 2) derive AES key from password
   std::vector<uint8_t> salt(16); random_bytes(salt);
   std::vector<uint8_t> aes_key = pbkdf2_sha256(password, salt, PBKDF2_ITERS, 32);
 
-  // 3) encrypt private key with AES-GCM
   std::vector<uint8_t> nonce(AESGCMCrypto::NONCE_SIZE); random_bytes(nonce);
   AESGCMCrypto crypto(aes_key);
-  std::vector<uint8_t> ct = crypto.encrypt(out.priv, nonce); // ct||tag
+  std::vector<uint8_t> ct = crypto.encrypt(out.priv, nonce);
 
-  // 4) write file
   std::ofstream f(path, std::ios::binary | std::ios::trunc);
   if (!f) throw std::runtime_error("open profile for write failed");
 
@@ -131,7 +127,6 @@ void IdentityStore::load_profile(const std::string& path, const std::string& pas
 
   if (!f.good()) throw std::runtime_error("read profile failed");
 
-  // derive key & decrypt
   std::vector<uint8_t> aes_key = pbkdf2_sha256(password, salt, it, 32);
   AESGCMCrypto crypto(aes_key);
   out.priv = crypto.decrypt(ct, nonce);

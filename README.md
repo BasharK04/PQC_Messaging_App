@@ -1,5 +1,13 @@
+<<<<<<< HEAD
 
 # E2EE Messaging
+=======
+<<<<<<< HEAD
+E2EE Messaging
+=======
+# E2EE Messaging
+>>>>>>> 8e8fdc1 (readme update)
+>>>>>>> 5b72c9a (comments)
 
 End-to-end encrypted 1:1 chat built in C++17 as a learning project. It runs locally or against a small relay server (tested on a $6/mo DigitalOcean droplet).
 
@@ -13,6 +21,7 @@ End-to-end encrypted 1:1 chat built in C++17 as a learning project. It runs loca
 ## Build
 Prerequisites: CMake, a C++17 compiler, Boost.System, OpenSSL, Protobuf, liboqs.
 
+<<<<<<< HEAD
 ```
 ./scripts/build.sh          # default build
 make                        # same as above
@@ -29,6 +38,24 @@ Messages typed in one terminal show up in the other. The first handshake pins pe
 
 ## Deploying the Relay (DigitalOcean)
 ```
+=======
+```
+./scripts/build.sh          # default build
+make                        # same as above
+make gui                    # build GUI too (if Qt available)
+make test                   # run in-memory loopback test
+```
+
+## Quick Local Test
+1. `./build/relay_server 8080`
+2. `./build/relay_cli --host --relay http://127.0.0.1:8080 --room demo --password pass123`
+3. `./build/relay_cli --connect --relay http://127.0.0.1:8080 --room demo --password pass123`
+
+Messages typed in one terminal show up in the other. The first handshake pins peer fingerprints in `pins.txt`.
+
+## Deploying the Relay (DigitalOcean)
+```
+>>>>>>> 5b72c9a (comments)
 ssh root@<droplet_ip>
 sudo apt-get update
 sudo apt-get install -y build-essential cmake libboost-system-dev libssl-dev protobuf-compiler libprotobuf-dev
