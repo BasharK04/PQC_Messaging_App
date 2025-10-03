@@ -1,13 +1,5 @@
-<<<<<<< HEAD
-
+````markdown
 # E2EE Messaging
-=======
-<<<<<<< HEAD
-E2EE Messaging
-=======
-# E2EE Messaging
->>>>>>> 8e8fdc1 (readme update)
->>>>>>> 5b72c9a (comments)
 
 End-to-end encrypted 1:1 chat built in C++17 as a learning project. It runs locally or against a small relay server (tested on a $6/mo DigitalOcean droplet).
 
@@ -21,15 +13,15 @@ End-to-end encrypted 1:1 chat built in C++17 as a learning project. It runs loca
 ## Build
 Prerequisites: CMake, a C++17 compiler, Boost.System, OpenSSL, Protobuf, liboqs.
 
-<<<<<<< HEAD
-```
+```bash
 ./scripts/build.sh          # default build
 make                        # same as above
 make gui                    # build GUI too (if Qt available)
 make test                   # run in-memory loopback test
-```
+````
 
 ## Quick Local Test
+
 1. `./build/relay_server 8080`
 2. `./build/relay_cli --host --relay http://127.0.0.1:8080 --room demo --password pass123`
 3. `./build/relay_cli --connect --relay http://127.0.0.1:8080 --room demo --password pass123`
@@ -37,25 +29,8 @@ make test                   # run in-memory loopback test
 Messages typed in one terminal show up in the other. The first handshake pins peer fingerprints in `pins.txt`.
 
 ## Deploying the Relay (DigitalOcean)
-```
-=======
-```
-./scripts/build.sh          # default build
-make                        # same as above
-make gui                    # build GUI too (if Qt available)
-make test                   # run in-memory loopback test
-```
 
-## Quick Local Test
-1. `./build/relay_server 8080`
-2. `./build/relay_cli --host --relay http://127.0.0.1:8080 --room demo --password pass123`
-3. `./build/relay_cli --connect --relay http://127.0.0.1:8080 --room demo --password pass123`
-
-Messages typed in one terminal show up in the other. The first handshake pins peer fingerprints in `pins.txt`.
-
-## Deploying the Relay (DigitalOcean)
-```
->>>>>>> 5b72c9a (comments)
+```bash
 ssh root@<droplet_ip>
 sudo apt-get update
 sudo apt-get install -y build-essential cmake libboost-system-dev libssl-dev protobuf-compiler libprotobuf-dev
@@ -65,23 +40,33 @@ cmake --build build -j1       # use -j1 on small RAM droplets
 sudo ufw allow 8080/tcp
 sudo systemctl enable --now relay_server   # uses deploy/relay_server.service
 ```
+
 Clients connect with the same relay URL + room, for example:
-```
+
+```bash
 ./build/relay_cli --host    --relay http://<droplet_ip>:8080 --room demo --password pass123
 ./build/relay_cli --connect --relay http://<droplet_ip>:8080 --room demo --password pass123
 ```
 
 ## Architecture & Crypto
-- **Identity**: `client.id` stores a 32-byte Ed25519 keypair encrypted with AES-GCM. The key is derived from the user password via PBKDF2-HMAC-SHA256 (200k iterations, random salt).
-- **Handshake**: Each connection creates a Kyber ephemeral keypair, signs it with Ed25519, exchanges ciphertext, and derives the shared secret. HKDF (salt=`"E2EE-v1"`, info=`"AES-256-GCM"`) stretches it to 32 bytes for AES-256-GCM.
-- **Messaging**: ChatMessage (protobuf) carries nonce + ciphertext + timestamp. Envelope wraps it for the relay; the relay never decrypts content.
-- **Transports**: `tcp_transport.*` (dev TCP testing), `beast_ws_transport.*` (Boost.Beast WebSocket for CLI), `ws_transport.*` (Qt WebSocket for GUI).
-- **Relay**: `relay_server.cpp` groups WebSocket connections by `room` query string and forwards binary frames to other participants in that room.
+
+* **Identity**: `client.id` stores a 32-byte Ed25519 keypair encrypted with AES-GCM. The key is derived from the user password via PBKDF2-HMAC-SHA256 (200k iterations, random salt).
+* **Handshake**: Each connection creates a Kyber ephemeral keypair, signs it with Ed25519, exchanges ciphertext, and derives the shared secret. HKDF (salt=`"E2EE-v1"`, info=`"AES-256-GCM"`) stretches it to 32 bytes for AES-256-GCM.
+* **Messaging**: ChatMessage (protobuf) carries nonce + ciphertext + timestamp. Envelope wraps it for the relay; the relay never decrypts content.
+* **Transports**: `tcp_transport.*` (dev TCP testing), `beast_ws_transport.*` (Boost.Beast WebSocket for CLI), `ws_transport.*` (Qt WebSocket for GUI).
+* **Relay**: `relay_server.cpp` groups WebSocket connections by `room` query string and forwards binary frames to other participants in that room.
 
 ## TODO / Next Steps
-- Add TLS termination (e.g., Caddy in front of the relay) so clients use `https://`/`wss://` URLs.
-- Build a small directory service (register/login, username search, public-key lookup, presence) to avoid manual room coordination.
-- Package a release target that bundles binaries + quickstart docs.
+
+* Add TLS termination (e.g., Caddy in front of the relay) so clients use `https://`/`wss://` URLs.
+* Build a small directory service (register/login, username search, public-key lookup, presence) to avoid manual room coordination.
+* Package a release target that bundles binaries + quickstart docs.
 
 ## License
+
 See `LICENSE`.
+
+```
+
+Would you like me to also polish it a bit more for **GitHub readability** (like adding shields/badges, inline code highlighting for crypto terms, and collapsible sections), or do you want to keep it minimal and straightforward?
+```
