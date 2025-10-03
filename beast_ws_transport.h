@@ -3,13 +3,13 @@
 #include <vector>
 #include <cstdint>
 
-// Minimal blocking WebSocket client built on Boost.Beast for CLI usage.
+// Blocking WebSocket client built with Boost.Beast for the CLI.
 class BeastWebSocketTransport {
 public:
   BeastWebSocketTransport();
   ~BeastWebSocketTransport();
 
-  // Accepts ws:// or wss:// URLs. Returns true on success.
+  // Accepts ws:// or wss:// URLs.
   bool connect_url(const std::string& url);
   bool send(const std::vector<uint8_t>& data);
   bool recv(std::vector<uint8_t>& out);

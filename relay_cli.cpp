@@ -17,7 +17,7 @@ static std::string ws_join(const std::string& base, const std::string& room) {
   else if (url.rfind("https://", 0) == 0) url.replace(0, 5, "wss");
   if (url.find('/', url.find("://") + 3) == std::string::npos) url += "/ws";
   if (url.find("/ws", url.find("://") + 3) == std::string::npos) {
-    // append /ws if path was '/' or empty
+    // add /ws when the path is empty
     auto slash = url.find("://");
     auto hostend = url.find('/', slash + 3);
     if (hostend == std::string::npos) url += "/ws";
@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
   if (!ok) { std::cerr << "Handshake failed: " << err << "\n"; return 1; }
   std::cout << "Peer fp: " << peer_fp.substr(0,16) << "...\n";
 
-  // Simple TOFU pinning: pins.txt stores "room fingerprint\n" lines.
+  // TOFU pinning: remember the first seen fingerprint
   auto load_pin = [&](const std::string& key)->std::string{
     std::ifstream f("pins.txt");
     if (!f) return {};
@@ -105,8 +105,7 @@ int main(int argc, char* argv[]) {
     return {};
   };
   auto save_pin = [&](const std::string& key, const std::string& val){
-    // Append or rewrite line: for simplicity, append if not present.
-    // If present and different, we don't overwrite automatically.
+    // append if we haven't seen this key before
     std::ifstream fin("pins.txt");
     bool exists=false; std::string k,v; while (fin >> k >> v) { if (k==key) { exists=true; break; } }
     if (!exists) { std::ofstream f("pins.txt", std::ios::app); f << key << " " << val << "\n"; }
@@ -125,7 +124,6 @@ int main(int argc, char* argv[]) {
   }
 
   std::cout << "Type messages, Ctrl-D to quit\n";
-  // simple loop: stdin -> send; recv -> print (in another thread)
   std::atomic<bool> running{true};
   std::thread rx([&]{
     while (running) {

@@ -1,7 +1,7 @@
 #include "hkdf.h"
 #include <stdexcept>
 #include <openssl/evp.h>
-#include <openssl/kdf.h>   // <-- required for HKDF APIs
+#include <openssl/kdf.h>
 
 std::vector<uint8_t> hkdf_sha256(const std::vector<uint8_t>& ikm,
                                  const std::vector<uint8_t>& salt,

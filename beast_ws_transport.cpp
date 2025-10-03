@@ -11,14 +11,14 @@
 
 namespace {
 struct ParsedUrl {
-  std::string scheme; // ws or wss
+  std::string scheme;    // ws or wss
   std::string host;
   std::string port;
-  std::string target; // path+query
+  std::string target;    // path+query
 };
 
 static bool parse_ws_url(const std::string& url, ParsedUrl& out) {
-  // Very small parser: scheme://host[:port]/path?query
+  // scheme://host[:port]/path?query
   auto pos = url.find("://");
   if (pos == std::string::npos) return false;
   out.scheme = url.substr(0, pos);
@@ -119,4 +119,3 @@ bool BeastWebSocketTransport::connect_url(const std::string& url) { return impl_
 bool BeastWebSocketTransport::send(const std::vector<uint8_t>& data) { return impl_->send(data); }
 bool BeastWebSocketTransport::recv(std::vector<uint8_t>& out) { return impl_->recv(out); }
 void BeastWebSocketTransport::close() { impl_->close(); }
-
