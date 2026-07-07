@@ -39,16 +39,19 @@ public:
   const Session& session() const { return session_; }
 
   // Encrypts plaintext and produces a serialized Envelope ready for transport.
+  // Non-const: advances the per-session send sequence counter.
   bool encryptAndSerializeMessage(const std::string& plaintext,
                                   const std::string& senderId,
                                   const std::string& toUsername,
                                   std::vector<uint8_t>& outBytes,
-                                  std::string& errorOut) const;
+                                  std::string& errorOut);
 
   // Parses an incoming frame and decrypts the inner ChatMessage, returning plaintext.
+  // Non-const: advances the per-session last-received sequence counter and
+  // rejects replays / reordering.
   bool parseAndDecryptMessage(const std::vector<uint8_t>& frame,
                               std::string& plaintextOut,
-                              std::string& errorOut) const;
+                              std::string& errorOut);
 
 private:
   bool clientHandshakeInternal(const SendFrameFn& send,
@@ -60,7 +63,12 @@ private:
                                std::string& peerFingerprintOut,
                                std::string& errorOut);
 
+  // Which side of the handshake we are; determines the AAD direction tag and
+  // which derived key is used for send vs. receive.
+  enum class Role { None, Client, Server };
+
   Identity identity_;
   Session session_;
+  Role role_ = Role::None;
   bool sessionReady_ = false;
 };

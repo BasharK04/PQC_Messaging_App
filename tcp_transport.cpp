@@ -13,6 +13,11 @@
 
 using boost::asio::ip::tcp;
 
+// Hard cap on an announced frame length. A hostile or corrupt peer must not be
+// able to make us allocate an arbitrarily large buffer (up to 4 GiB) from a
+// 32-bit length prefix.
+static constexpr size_t kMaxFrameBytes = 16 * 1024 * 1024;  // 16 MiB
+
 TcpTransport::TcpTransport() : socket_(io_) {}
 TcpTransport::~TcpTransport() { close(); }
 
@@ -56,6 +61,8 @@ bool TcpTransport::recv(std::vector<uint8_t>& out_frame) {
     uint32_t net_len = 0;
     boost::asio::read(socket_, boost::asio::buffer(&net_len, sizeof(net_len)));
     uint32_t len = ntohl(net_len);
+    // Reject an oversized frame BEFORE allocating anything.
+    if (len > kMaxFrameBytes) return false;
     out_frame.resize(len);
     if (len) {
       boost::asio::read(socket_, boost::asio::buffer(out_frame.data(), out_frame.size()));

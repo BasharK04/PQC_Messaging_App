@@ -1,8 +1,11 @@
 #include "connection_engine.h"
 
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <string>
+
+#include <openssl/crypto.h>
 
 #include "envelope.pb.h"
 #include "handshake.pb.h"
@@ -18,6 +21,13 @@ int64_t nowSeconds() {
   return duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
 }
 
+// AAD direction tags: 0x01 = client->server, 0x02 = server->client.
+constexpr uint8_t kDirC2S = 0x01;
+constexpr uint8_t kDirS2C = 0x02;
+
+// Defense-in-depth clock-skew window for message timestamps (seconds).
+constexpr int64_t kMaxClockSkewSeconds = 300;
+
 std::vector<uint8_t> concat(const std::string& prefix,
                             const std::vector<uint8_t>& a,
                             const std::vector<uint8_t>& b = {}) {
@@ -27,6 +37,36 @@ std::vector<uint8_t> concat(const std::string& prefix,
   out.insert(out.end(), a.begin(), a.end());
   out.insert(out.end(), b.begin(), b.end());
   return out;
+}
+
+void put_u32_be(std::vector<uint8_t>& v, uint32_t x) {
+  v.push_back(static_cast<uint8_t>((x >> 24) & 0xFF));
+  v.push_back(static_cast<uint8_t>((x >> 16) & 0xFF));
+  v.push_back(static_cast<uint8_t>((x >> 8) & 0xFF));
+  v.push_back(static_cast<uint8_t>(x & 0xFF));
+}
+
+void put_u64_be(std::vector<uint8_t>& v, uint64_t x) {
+  for (int i = 7; i >= 0; --i) {
+    v.push_back(static_cast<uint8_t>((x >> (i * 8)) & 0xFF));
+  }
+}
+
+// Canonical authenticated header bound as AES-GCM AAD. Both sides reconstruct it
+// identically from: direction tag, sequence number, sender id, timestamp. The
+// sender_id is length-prefixed so it can never collide with adjacent fields.
+std::vector<uint8_t> buildMessageAad(uint8_t dirTag,
+                                     uint64_t seq,
+                                     const std::string& senderId,
+                                     int64_t timestamp) {
+  std::vector<uint8_t> aad;
+  aad.reserve(1 + 8 + 4 + senderId.size() + 8);
+  aad.push_back(dirTag);
+  put_u64_be(aad, seq);
+  put_u32_be(aad, static_cast<uint32_t>(senderId.size()));
+  aad.insert(aad.end(), senderId.begin(), senderId.end());
+  put_u64_be(aad, static_cast<uint64_t>(timestamp));
+  return aad;
 }
 }  // namespace
 
@@ -73,19 +113,27 @@ bool ConnectionEngine::encryptAndSerializeMessage(const std::string& plaintext,
                                                   const std::string& senderId,
                                                   const std::string& toUsername,
                                                   std::vector<uint8_t>& outBytes,
-                                                  std::string& errorOut) const {
+                                                  std::string& errorOut) {
   if (!sessionReady_) {
     errorOut = "Session key not established";
     return false;
   }
   try {
+    // Stamp a fresh monotonic sequence number and current timestamp, then bind
+    // the direction + seq + sender + timestamp into the AEAD AAD.
+    const uint64_t seq = session_.next_send_seq();
+    const int64_t ts = nowSeconds();
+    const uint8_t dirTag = (role_ == Role::Server) ? kDirS2C : kDirC2S;
+    const auto aad = buildMessageAad(dirTag, seq, senderId, ts);
+
     std::vector<uint8_t> plain(plaintext.begin(), plaintext.end());
     auto nonce = AESGCMCrypto::random_nonce();
-    auto ct_tag = session_.encrypt(plain, nonce);
+    auto ct_tag = session_.encrypt(plain, nonce, aad);
 
     ChatMessage inner;
     inner.set_sender_id(senderId);
-    inner.set_timestamp_unix(nowSeconds());
+    inner.set_timestamp_unix(ts);
+    inner.set_seq(seq);
     inner.set_nonce(reinterpret_cast<const char*>(nonce.data()), nonce.size());
     inner.set_encrypted_content(reinterpret_cast<const char*>(ct_tag.data()), ct_tag.size());
 
@@ -117,7 +165,7 @@ bool ConnectionEngine::encryptAndSerializeMessage(const std::string& plaintext,
 
 bool ConnectionEngine::parseAndDecryptMessage(const std::vector<uint8_t>& frame,
                                               std::string& plaintextOut,
-                                              std::string& errorOut) const {
+                                              std::string& errorOut) {
   if (!sessionReady_) {
     errorOut = "Session key not established";
     return false;
@@ -132,16 +180,45 @@ bool ConnectionEngine::parseAndDecryptMessage(const std::vector<uint8_t>& frame,
     errorOut = "Malformed ChatMessage";
     return false;
   }
+
+  const uint64_t seq = inner.seq();
+  const int64_t ts = inner.timestamp_unix();
+
+  // Defense-in-depth: reject messages whose timestamp is implausibly far from
+  // local time (either direction).
+  int64_t skew = nowSeconds() - ts;
+  if (skew < 0) skew = -skew;
+  if (skew > kMaxClockSkewSeconds) {
+    errorOut = "message timestamp outside allowed window";
+    return false;
+  }
+
+  // Reconstruct the SAME AAD the sender bound; the peer's sending direction is
+  // the opposite of ours.
+  const uint8_t dirTag = (role_ == Role::Server) ? kDirC2S : kDirS2C;
+  const auto aad = buildMessageAad(dirTag, seq, inner.sender_id(), ts);
+
   std::vector<uint8_t> nonce(inner.nonce().begin(), inner.nonce().end());
   std::vector<uint8_t> ct_tag(inner.encrypted_content().begin(), inner.encrypted_content().end());
+  std::vector<uint8_t> plain;
   try {
-    auto plain = session_.decrypt(ct_tag, nonce);
-    plaintextOut.assign(plain.begin(), plain.end());
-    return true;
+    // Authenticate first (this fails on any AAD/metadata tampering)...
+    plain = session_.decrypt(ct_tag, nonce, aad);
   } catch (const std::exception& ex) {
     errorOut = ex.what();
     return false;
   }
+
+  // ...then enforce strict monotonic sequencing to reject replays / reordering.
+  // Done only after a successful tag check so an unauthenticated frame cannot
+  // poison the counter.
+  if (!session_.accept_recv_seq(seq)) {
+    errorOut = "replay or reordering detected (non-monotonic seq)";
+    return false;
+  }
+
+  plaintextOut.assign(plain.begin(), plain.end());
+  return true;
 }
 
 bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
@@ -201,8 +278,20 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
 
     std::vector<uint8_t> ss;
     kem.decapsulate(ct, sk, ss);
-    session_.set_key(hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info(), 32));
+
+    // Expand the single KEM shared secret into two directional keys. The client
+    // encrypts with k_c2s (send) and decrypts with k_s2c (recv).
+    auto k_c2s = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_c2s(), 32);
+    auto k_s2c = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_s2c(), 32);
+    session_.set_keys(k_c2s, k_s2c);
+    role_ = Role::Client;
     sessionReady_ = true;
+
+    // Zeroize sensitive intermediate key material; the Session keeps its own copy.
+    OPENSSL_cleanse(ss.data(), ss.size());
+    OPENSSL_cleanse(sk.data(), sk.size());
+    OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
+    OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
 
     peerFingerprintOut = IdentityStore::fingerprint_hex(server_pub);
     return true;
@@ -266,8 +355,19 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       return false;
     }
 
-    session_.set_key(hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info(), 32));
+    // Expand the single KEM shared secret into two directional keys. The server
+    // encrypts with k_s2c (send) and decrypts with k_c2s (recv) — mirror of the
+    // client.
+    auto k_c2s = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_c2s(), 32);
+    auto k_s2c = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_s2c(), 32);
+    session_.set_keys(k_s2c, k_c2s);
+    role_ = Role::Server;
     sessionReady_ = true;
+
+    // Zeroize sensitive intermediate key material; the Session keeps its own copy.
+    OPENSSL_cleanse(ss.data(), ss.size());
+    OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
+    OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
 
     peerFingerprintOut = IdentityStore::fingerprint_hex(client_pub);
     return true;

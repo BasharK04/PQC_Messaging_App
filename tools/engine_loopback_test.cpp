@@ -12,6 +12,29 @@
 #include <google/protobuf/stubs/common.h>
 
 #include "connection_engine.h"
+#include "envelope.pb.h"
+#include "messages.pb.h"
+
+// Re-encode a frame with the inner ChatMessage's sender_id mutated. This flips a
+// byte of the AUTHENTICATED metadata (bound into the GCM AAD) without touching
+// the ciphertext, so a correct implementation must fail the tag on decrypt.
+static bool tamper_sender_id(const std::vector<uint8_t>& in,
+                             std::vector<uint8_t>& out) {
+  Envelope env;
+  if (!env.ParseFromArray(in.data(), static_cast<int>(in.size()))) return false;
+  ChatMessage inner;
+  if (!inner.ParseFromArray(env.payload_e2e().data(),
+                            static_cast<int>(env.payload_e2e().size())))
+    return false;
+  inner.set_sender_id(inner.sender_id() + "X");  // tamper metadata only
+  std::string inner_bytes;
+  if (!inner.SerializeToString(&inner_bytes)) return false;
+  env.set_payload_e2e(inner_bytes);
+  std::string env_bytes;
+  if (!env.SerializeToString(&env_bytes)) return false;
+  out.assign(env_bytes.begin(), env_bytes.end());
+  return true;
+}
 
 struct Channel {
   std::mutex mtx;
@@ -90,20 +113,65 @@ int main() {
   std::cout << "client sees server fp: " << peer_client.substr(0, 16) << "...\n";
   th_server.join();
 
-  // Round-trip a message
+  // ---- 1) Real encrypt -> decrypt round trip (seq = 1) ----
   std::vector<uint8_t> frame;
   if (!client.encryptAndSerializeMessage("hello loopback", "client", "server", frame, err)) {
     std::cerr << "encrypt failed: " << err << "\n"; return 1;
   }
-  if (!send_to(c2s, frame)) { std::cerr << "send frame failed\n"; return 1; }
-  std::vector<uint8_t> inbound;
-  if (!recv_from(c2s, inbound)) { std::cerr << "unexpected channel state\n"; return 1; }
-  std::string plain;
-  if (!server.parseAndDecryptMessage(inbound, plain, err)) {
-    std::cerr << "decrypt failed: " << err << "\n"; return 1;
+  {
+    std::string plain;
+    if (!server.parseAndDecryptMessage(frame, plain, err)) {
+      std::cerr << "decrypt failed: " << err << "\n"; return 1;
+    }
+    if (plain != "hello loopback") {
+      std::cerr << "round-trip mismatch: got '" << plain << "'\n"; return 1;
+    }
+    std::cout << "server decrypted: " << plain << "\n";
   }
-  std::cout << "server decrypted: " << plain << "\n";
 
+  // ---- 1b) Reverse direction (server -> client) proves the s2c key works ----
+  {
+    std::vector<uint8_t> rframe;
+    if (!server.encryptAndSerializeMessage("reply from server", "server", "client", rframe, err)) {
+      std::cerr << "server encrypt failed: " << err << "\n"; return 1;
+    }
+    std::string plain;
+    if (!client.parseAndDecryptMessage(rframe, plain, err)) {
+      std::cerr << "client decrypt failed: " << err << "\n"; return 1;
+    }
+    if (plain != "reply from server") {
+      std::cerr << "reverse round-trip mismatch: got '" << plain << "'\n"; return 1;
+    }
+    std::cout << "client decrypted: " << plain << "\n";
+  }
+
+  // ---- 2) Replay of an already-accepted frame must be REJECTED ----
+  {
+    std::string plain;
+    if (server.parseAndDecryptMessage(frame, plain, err)) {
+      std::cerr << "SECURITY FAIL: replayed frame was accepted\n"; return 1;
+    }
+    std::cout << "replay correctly rejected: " << err << "\n";
+  }
+
+  // ---- 3) Flipping an authenticated metadata byte must FAIL decryption ----
+  {
+    std::vector<uint8_t> frame2;
+    if (!client.encryptAndSerializeMessage("second message", "client", "server", frame2, err)) {
+      std::cerr << "encrypt(2) failed: " << err << "\n"; return 1;
+    }
+    std::vector<uint8_t> tampered;
+    if (!tamper_sender_id(frame2, tampered)) {
+      std::cerr << "tamper helper failed\n"; return 1;
+    }
+    std::string plain;
+    if (server.parseAndDecryptMessage(tampered, plain, err)) {
+      std::cerr << "SECURITY FAIL: AAD-tampered frame was accepted\n"; return 1;
+    }
+    std::cout << "AAD tamper correctly rejected: " << err << "\n";
+  }
+
+  std::cout << "ALL CHECKS PASSED\n";
   google::protobuf::ShutdownProtobufLibrary();
   return 0;
 }

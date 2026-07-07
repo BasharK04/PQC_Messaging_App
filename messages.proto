@@ -15,4 +15,9 @@ message ChatMessage {
 
   // Field 4: A timestamp for when the message was sent.
   int64 timestamp_unix = 4;
+
+  // Field 5: Per-session monotonic sequence number (starts at 1). Bound into the
+  // AEAD AAD and enforced strictly increasing by the receiver to reject replays
+  // and reordering.
+  uint64 seq = 5;
 }

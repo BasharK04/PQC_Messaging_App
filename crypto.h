@@ -18,15 +18,11 @@ public:
     static constexpr size_t NONCE_SIZE = 12; // 96-bit recommended for GCM
     static constexpr size_t TAG_SIZE   = 16; // 128-bit
 
-    AESGCMCrypto() {
-        // Hardcoded demo key (INSECURE: for demo only; replace with KEM-derived key later)
-        key_ = {
-            0x00,0x01,0x02,0x03, 0x04,0x05,0x06,0x07,
-            0x08,0x09,0x0A,0x0B, 0x0C,0x0D,0x0E,0x0F,
-            0x10,0x11,0x12,0x13, 0x14,0x15,0x16,0x17,
-            0x18,0x19,0x1A,0x1B, 0x1C,0x1D,0x1E,0x1F
-        };
-    }
+    // The old default constructor loaded a hardcoded, publicly-known demo key
+    // (00..1F). That is a serious footgun: any Session accidentally constructed
+    // without a real derived key would "work" while providing zero security.
+    // It is deleted so every AESGCMCrypto MUST be given a real 32-byte key.
+    AESGCMCrypto() = delete;
 
     explicit AESGCMCrypto(const std::vector<uint8_t>& key) {
         if (key.size() != KEY_SIZE) {
@@ -36,7 +32,8 @@ public:
     }
 
     std::vector<uint8_t> encrypt(const std::vector<uint8_t>& plaintext,
-                                 const std::vector<uint8_t>& nonce) const {
+                                 const std::vector<uint8_t>& nonce,
+                                 const std::vector<uint8_t>& aad = {}) const {
         if (nonce.size() != NONCE_SIZE) {
             throw std::invalid_argument("AESGCMCrypto::encrypt: nonce must be 12 bytes");
         }
@@ -60,7 +57,12 @@ public:
             if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key_.data(), nonce.data()) != 1)
                 throw std::runtime_error("EncryptInit (key/iv) failed");
 
-            // No AAD used
+            // Authenticated Additional Data (bound into the tag, not encrypted).
+            if (!aad.empty()) {
+                int aadlen = 0;
+                if (EVP_EncryptUpdate(ctx, nullptr, &aadlen, aad.data(), (int)aad.size()) != 1)
+                    throw std::runtime_error("EncryptUpdate (AAD) failed");
+            }
 
             if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
                                   plaintext.data(), (int)plaintext.size()) != 1)
@@ -91,7 +93,8 @@ public:
     }
 
     std::vector<uint8_t> decrypt(const std::vector<uint8_t>& ciphertext_and_tag,
-                                 const std::vector<uint8_t>& nonce) const {
+                                 const std::vector<uint8_t>& nonce,
+                                 const std::vector<uint8_t>& aad = {}) const {
         if (nonce.size() != NONCE_SIZE) {
             throw std::invalid_argument("AESGCMCrypto::decrypt: nonce must be 12 bytes");
         }
@@ -120,7 +123,13 @@ public:
             if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key_.data(), nonce.data()) != 1)
                 throw std::runtime_error("DecryptInit (key/iv) failed");
 
-            // No AAD used
+            // Authenticated Additional Data must match what was used at encrypt
+            // time or the tag verification below fails.
+            if (!aad.empty()) {
+                int aadlen = 0;
+                if (EVP_DecryptUpdate(ctx, nullptr, &aadlen, aad.data(), (int)aad.size()) != 1)
+                    throw std::runtime_error("DecryptUpdate (AAD) failed");
+            }
 
             if (EVP_DecryptUpdate(ctx, plaintext.data(), &len, ct_ptr, (int)ct_len) != 1)
                 throw std::runtime_error("DecryptUpdate failed");
@@ -132,7 +141,9 @@ public:
 
             int ret = EVP_DecryptFinal_ex(ctx, plaintext.data() + outlen, &len);
             if (ret <= 0) {
-                EVP_CIPHER_CTX_free(ctx);
+                // Let the catch(...) below free ctx exactly once. Freeing here
+                // AND in the handler is a double-free (crash on the tag-failure
+                // path, which AAD/replay rejection now exercises).
                 throw std::runtime_error("GCM tag verification failed");
             }
             outlen += len;

@@ -20,6 +20,10 @@ using tcp = boost::asio::ip::tcp;
 namespace http = boost::beast::http;
 namespace websocket = boost::beast::websocket;
 
+// Hard cap on an inbound WebSocket message so a client cannot force a huge
+// server-side allocation. Mirrors the TCP transport's kMaxFrameBytes.
+static constexpr std::size_t kMaxFrameBytes = 16 * 1024 * 1024;  // 16 MiB
+
 struct WsSession; // fwd
 
 static std::unordered_map<std::string, std::vector<std::weak_ptr<WsSession>>> g_rooms;
@@ -45,12 +49,18 @@ struct WsSession : public std::enable_shared_from_this<WsSession> {
     boost::system::error_code ec;
     ws.set_option(websocket::stream_base::timeout::suggested(boost::beast::role_type::server));
     ws.binary(true);
+    // Enforce the inbound frame cap before any large allocation occurs.
+    ws.read_message_max(kMaxFrameBytes);
 
     for (;;) {
       boost::beast::flat_buffer buffer;
       ws.read(buffer, ec);
       if (ec == websocket::error::closed || ec == boost::asio::error::eof) break;
       if (ec) { std::cerr << "[ws] read error: " << ec.message() << "\n"; break; }
+      if (buffer.size() > kMaxFrameBytes) {
+        std::cerr << "[ws] frame exceeds max size; dropping connection\n";
+        break;
+      }
 
       // broadcast to others in the room
       std::vector<std::shared_ptr<WsSession>> peers;

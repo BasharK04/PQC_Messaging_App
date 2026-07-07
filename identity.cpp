@@ -8,6 +8,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
+#include <openssl/crypto.h>
 
 #if defined(_WIN32)
   #include <winsock2.h>
@@ -16,7 +17,39 @@
 #endif
 
 static constexpr uint32_t FILE_VERSION = 1;
-static constexpr uint32_t PBKDF2_ITERS = 200000;  // tweak as desired
+static constexpr uint32_t PBKDF2_ITERS = 600000;  // OWASP-aligned default
+// Reject any stored profile that claims fewer iterations than this, so a
+// tampered low-iteration header cannot weaken the KDF.
+static constexpr uint32_t MIN_PBKDF2_ITERS = 100000;
+
+namespace {
+void append_u32_be(std::vector<uint8_t>& v, uint32_t x) {
+  uint32_t n = htonl(x);
+  const uint8_t* p = reinterpret_cast<const uint8_t*>(&n);
+  v.insert(v.end(), p, p + 4);
+}
+
+// Reconstruct the exact on-disk header bytes (everything preceding the
+// encrypted seed) so they can be bound as AES-GCM AAD. Tampering any header
+// field then fails the tag on load.
+std::vector<uint8_t> build_header_aad(uint32_t version, uint32_t iters,
+                                      const std::vector<uint8_t>& salt,
+                                      const std::vector<uint8_t>& nonce,
+                                      const std::vector<uint8_t>& pub) {
+  std::vector<uint8_t> aad;
+  static const char magic[8] = {'E','2','E','E','I','D','0','1'};
+  aad.insert(aad.end(), magic, magic + 8);
+  append_u32_be(aad, version);
+  append_u32_be(aad, iters);
+  append_u32_be(aad, static_cast<uint32_t>(salt.size()));
+  aad.insert(aad.end(), salt.begin(), salt.end());
+  append_u32_be(aad, static_cast<uint32_t>(nonce.size()));
+  aad.insert(aad.end(), nonce.begin(), nonce.end());
+  append_u32_be(aad, static_cast<uint32_t>(pub.size()));
+  aad.insert(aad.end(), pub.begin(), pub.end());
+  return aad;
+}
+}  // namespace
 
 void IdentityStore::random_bytes(std::vector<uint8_t>& buf) {
   if (RAND_bytes(buf.data(), (int)buf.size()) != 1) {
@@ -65,8 +98,20 @@ void IdentityStore::create_profile(const std::string& path, const std::string& p
   std::vector<uint8_t> aes_key = pbkdf2_sha256(password, salt, PBKDF2_ITERS, 32);
 
   std::vector<uint8_t> nonce(AESGCMCrypto::NONCE_SIZE); random_bytes(nonce);
-  AESGCMCrypto crypto(aes_key);
-  std::vector<uint8_t> ct = crypto.encrypt(out.priv, nonce);
+
+  // Bind the file header (magic, version, iters, salt, nonce, pub) as AAD so any
+  // header tampering is detected at load time.
+  auto header_aad = build_header_aad(FILE_VERSION, PBKDF2_ITERS, salt, nonce, out.pub);
+
+  std::vector<uint8_t> ct;
+  try {
+    AESGCMCrypto crypto(aes_key);
+    ct = crypto.encrypt(out.priv, nonce, header_aad);
+  } catch (...) {
+    OPENSSL_cleanse(aes_key.data(), aes_key.size());
+    throw;
+  }
+  OPENSSL_cleanse(aes_key.data(), aes_key.size());
 
   std::ofstream f(path, std::ios::binary | std::ios::trunc);
   if (!f) throw std::runtime_error("open profile for write failed");
@@ -108,6 +153,7 @@ void IdentityStore::load_profile(const std::string& path, const std::string& pas
   if (v != FILE_VERSION) throw std::runtime_error("unsupported version");
 
   uint32_t it=0; f.read(reinterpret_cast<char*>(&it), 4); it = ntohl(it);
+  if (it < MIN_PBKDF2_ITERS) throw std::runtime_error("profile rejected: PBKDF2 iterations below minimum");
 
   uint32_t sl=0; f.read(reinterpret_cast<char*>(&sl), 4); sl = ntohl(sl);
   if (sl == 0 || sl > 1024) throw std::runtime_error("profile corrupt (salt)");
@@ -127,9 +173,21 @@ void IdentityStore::load_profile(const std::string& path, const std::string& pas
 
   if (!f.good()) throw std::runtime_error("read profile failed");
 
+  // Reconstruct the header AAD exactly as written and require it to authenticate.
+  auto header_aad = build_header_aad(v, it, salt, nonce, out.pub);
+
   std::vector<uint8_t> aes_key = pbkdf2_sha256(password, salt, it, 32);
-  AESGCMCrypto crypto(aes_key);
-  out.priv = crypto.decrypt(ct, nonce);
+  std::vector<uint8_t> priv;
+  try {
+    AESGCMCrypto crypto(aes_key);
+    priv = crypto.decrypt(ct, nonce, header_aad);
+  } catch (...) {
+    OPENSSL_cleanse(aes_key.data(), aes_key.size());
+    if (!priv.empty()) OPENSSL_cleanse(priv.data(), priv.size());
+    throw;
+  }
+  OPENSSL_cleanse(aes_key.data(), aes_key.size());
+  out.priv = std::move(priv);
 }
 
 std::vector<uint8_t> IdentityStore::sign(const std::vector<uint8_t>& priv32,
