@@ -14,12 +14,8 @@ find_package(absl CONFIG REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(OQS REQUIRED IMPORTED_TARGET liboqs)
 
-# Qt (Widgets + Network + WebSockets)
-# If CMake can't find it, configure with: -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/qt"
-find_package(Qt6 COMPONENTS Widgets Network WebSockets REQUIRED)
-
-# Enable Qt's automoc for targets that use Qt
-set(CMAKE_AUTOMOC ON)
+# Qt is only required for the GUI; discover it lazily inside the BUILD_GUI block
+# below so headless relay builds (-DBUILD_GUI=OFF) do not need Qt installed.
 
 # ---- Protobuf (messages, envelope, handshake) ----
 set(PROTO_FILES
@@ -115,6 +111,11 @@ set_target_properties(pqc_client PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 # ---- GUI target (Relay-ready) ----
 option(BUILD_GUI "Build the Qt GUI app" ON)
 if (BUILD_GUI)
+  # Qt (Widgets + Network + WebSockets). If CMake can't find it, configure with:
+  # -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/qt"
+  find_package(Qt6 COMPONENTS Widgets Network WebSockets REQUIRED)
+  set(CMAKE_AUTOMOC ON)
+
   set(GUI_DIR ${CMAKE_SOURCE_DIR}/gui)
   set(GUI_SOURCES
     ${GUI_DIR}/main.cpp

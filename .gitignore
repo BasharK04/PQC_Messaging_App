@@ -31,3 +31,10 @@
 *.out
 *.app
 build/
+
+# macOS
+.DS_Store
+
+# Local secrets / runtime state — must never be committed
+*.id
+pins.txt
