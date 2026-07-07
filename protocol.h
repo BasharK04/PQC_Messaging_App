@@ -29,5 +29,14 @@ inline const std::vector<uint8_t>& hkdf_info_s2c() {
   static const std::vector<uint8_t> k = {'E','2','E','E','-','v','1','|','k','e','y','|','s','2','c'};
   return k;
 }
+
+// HKDF info label for the handshake key-confirmation key. Derived from the same
+// KEM shared secret but with a distinct info so it is independent of the
+// directional data keys. Used to prove both sides derived the same secret.
+inline const std::vector<uint8_t>& hkdf_info_confirm() {
+  // "E2EE-v1|confirm"
+  static const std::vector<uint8_t> k = {'E','2','E','E','-','v','1','|','c','o','n','f','i','r','m'};
+  return k;
+}
 } // namespace protocol
 

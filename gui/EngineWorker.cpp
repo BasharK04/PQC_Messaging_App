@@ -6,6 +6,7 @@
 #include <QUrlQuery>
 
 #include "ws_transport.h"
+#include "pin_store.h"
 
 namespace {
 QString shortenFingerprint(const std::string& fingerprint) {
@@ -15,6 +16,33 @@ QString shortenFingerprint(const std::string& fingerprint) {
 
 EngineWorker::EngineWorker(QObject* parent) : QObject(parent) {}
 EngineWorker::~EngineWorker() { disconnectFromPeer(); }
+
+bool EngineWorker::checkPeerPin(const QString& peerLabel, const std::string& peerFingerprint) {
+  if (peerFingerprint.empty()) {
+    // No fingerprint to check (should not happen after a successful handshake).
+    return true;
+  }
+  const std::string label = peerLabel.toStdString();
+  const PinResult r = PinStore::checkAndPin("pins.txt", label, peerFingerprint);
+  if (r == PinResult::Mismatch) {
+    const std::string pinned = PinStore::lookup("pins.txt", label);
+    emit error(QString("SECURITY: peer fingerprint for '%1' changed (pinned %2, now %3). "
+                       "Aborting — possible MITM. Delete the pins.txt entry only if you "
+                       "trust the change.")
+                   .arg(peerLabel,
+                        shortenFingerprint(pinned),
+                        shortenFingerprint(peerFingerprint)));
+    return false;
+  }
+  if (r == PinResult::Pinned) {
+    emit status(QString("First contact with '%1'. Pinned fingerprint %2. "
+                        "VERIFY it with your peer over a separate channel.")
+                    .arg(peerLabel, shortenFingerprint(peerFingerprint)));
+  } else {
+    emit status(QString("Peer fingerprint matches the pinned entry for '%1'.").arg(peerLabel));
+  }
+  return true;
+}
 
 bool EngineWorker::parseEndpoint(const QString& endpoint, std::string& host, uint16_t& port) {
   const auto ep = endpoint.trimmed();
@@ -62,6 +90,12 @@ void EngineWorker::startConnect(const QString& endpoint, const QString& password
     return;
   }
 
+  // Shared TOFU pin check. Abort (do not enter chat) on fingerprint mismatch.
+  if (!checkPeerPin(QString("%1:%2").arg(QString::fromStdString(host)).arg(port), peerFingerprint)) {
+    tcp_.close();
+    return;
+  }
+
   mode_ = Mode::TCP;
   isConnected_ = true;
   running_ = true;
@@ -99,6 +133,12 @@ void EngineWorker::startHost(quint16 port, const QString& password) {
   if (!engine_.runServerHandshake(send_fn, recv_fn, peerFingerprint, err)) {
     tcp_.close();
     emit error(QString("Handshake/host error: ") + err.c_str());
+    return;
+  }
+
+  // Shared TOFU pin check. Abort (do not enter chat) on fingerprint mismatch.
+  if (!checkPeerPin(QString("tcp-host:%1").arg(port), peerFingerprint)) {
+    tcp_.close();
     return;
   }
 
@@ -162,6 +202,13 @@ void EngineWorker::startRelayConnect(const QString& relayUrl, const QString& pee
     return;
   }
 
+  // Shared TOFU pin check, keyed by the peer's username. Abort on mismatch.
+  if (!checkPeerPin(peerUsername, peerFingerprint)) {
+    if (ws_) ws_->close();
+    ws_.reset();
+    return;
+  }
+
   mode_ = Mode::WS;
   isConnected_ = true;
   running_ = true;
@@ -208,6 +255,13 @@ void EngineWorker::startRelayHost(const QString& relayUrl, const QString& myUser
     if (ws_) ws_->close();
     ws_.reset();
     emit error(QString("Relay host handshake error: ") + err.c_str());
+    return;
+  }
+
+  // Shared TOFU pin check, keyed by our room/username. Abort on mismatch.
+  if (!checkPeerPin(myUsername, peerFingerprint)) {
+    if (ws_) ws_->close();
+    ws_.reset();
     return;
   }
 

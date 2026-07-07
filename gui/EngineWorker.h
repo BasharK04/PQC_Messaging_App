@@ -43,6 +43,11 @@ private:
   bool parseEndpoint(const QString& endpoint, std::string& host, uint16_t& port);
   void recvLoop();
 
+  // Shared TOFU peer pinning (same PinStore the CLI uses). Returns true if the
+  // caller may proceed to messaging; false if the connection must be aborted
+  // (fingerprint mismatch). Emits status/error to the UI as appropriate.
+  bool checkPeerPin(const QString& peerLabel, const std::string& peerFingerprint);
+
   // transport selection
   enum class Mode { None, TCP, WS };
   Mode mode_{Mode::None};

@@ -10,6 +10,7 @@
 
 #include "connection_engine.h"
 #include "beast_ws_transport.h"
+#include "pin_store.h"
 
 static std::string ws_join(const std::string& base, const std::string& room) {
   std::string url = base;
@@ -28,7 +29,8 @@ static std::string ws_join(const std::string& base, const std::string& room) {
 }
 
 static void print_usage(const char* exe) {
-  std::cerr << "Usage: " << exe << " (--host|--connect) --relay <url> --room <name> [--password <pw>]\n";
+  std::cerr << "Usage: " << exe << " (--host|--connect) --relay <url> --room <name> [--password <pw>] [--insecure]\n";
+  std::cerr << "  --insecure   DEV ONLY: disable TLS certificate verification for wss:// (self-signed relays)\n";
   std::cerr << "Examples:\n  " << exe << " --host --relay http://127.0.0.1:8080 --room alice --password mypass\n  "
             << exe << " --connect --relay http://127.0.0.1:8080 --room alice --password mypass\n";
 }
@@ -49,6 +51,7 @@ int main(int argc, char* argv[]) {
   std::string room;
   std::string pw;
   std::string id_path = "client.id";
+  bool insecure_tls = false;
   bool used_flags = false;
   for (int i=1; i<argc; ++i) {
     std::string a = argv[i];
@@ -58,6 +61,7 @@ int main(int argc, char* argv[]) {
     else if ((a == "--room" || a == "-m") && i+1 < argc) { room = argv[++i]; used_flags = true; }
     else if ((a == "--password" || a == "-p") && i+1 < argc) { pw = argv[++i]; used_flags = true; }
     else if ((a == "--id-file" || a == "-i") && i+1 < argc) { id_path = argv[++i]; used_flags = true; }
+    else if (a == "--insecure") { insecure_tls = true; used_flags = true; }
     else if (a == "--help" || a == "-h") { print_usage(argv[0]); return 0; }
   }
   if (!used_flags) {
@@ -80,6 +84,10 @@ int main(int argc, char* argv[]) {
   std::cout << "Identity " << (created?"created":"loaded") << ", fp: " << fp.substr(0,16) << "...\n";
 
   BeastWebSocketTransport ws;
+  if (insecure_tls) {
+    std::cerr << "[WARNING] --insecure enabled: TLS certificate verification is DISABLED.\n";
+    ws.set_insecure_tls(true);
+  }
   std::cout << "Connecting to " << url << " ...\n";
   if (!ws.connect_url(url)) { std::cerr << "WebSocket connect failed\n"; return 1; }
 
@@ -94,33 +102,22 @@ int main(int argc, char* argv[]) {
   if (!ok) { std::cerr << "Handshake failed: " << err << "\n"; return 1; }
   std::cout << "Peer fp: " << peer_fp.substr(0,16) << "...\n";
 
-  // TOFU pinning: remember the first seen fingerprint
-  auto load_pin = [&](const std::string& key)->std::string{
-    std::ifstream f("pins.txt");
-    if (!f) return {};
-    std::string k,v;
-    while (f >> k >> v) {
-      if (k == key) return v;
-    }
-    return {};
-  };
-  auto save_pin = [&](const std::string& key, const std::string& val){
-    // append if we haven't seen this key before
-    std::ifstream fin("pins.txt");
-    bool exists=false; std::string k,v; while (fin >> k >> v) { if (k==key) { exists=true; break; } }
-    if (!exists) { std::ofstream f("pins.txt", std::ios::app); f << key << " " << val << "\n"; }
-  };
-  const std::string key = url_host(relay) + "#" + room;
-  const std::string pinned = load_pin(key);
-  if (!pinned.empty() && pinned != peer_fp) {
-    std::cerr << "[TOFU] Peer fingerprint changed for room '" << room << "'!\n";
+  // TOFU pinning via the shared PinStore (same logic the GUI now uses). Keyed by
+  // relay-host#room so a peer identity change for a given room is caught.
+  const std::string pin_key = url_host(relay) + "#" + room;
+  const PinResult pin = PinStore::checkAndPin("pins.txt", pin_key, peer_fp);
+  if (pin == PinResult::Mismatch) {
+    const std::string pinned = PinStore::lookup("pins.txt", pin_key);
+    std::cerr << "[TOFU] Peer fingerprint CHANGED for room '" << room << "'!\n";
     std::cerr << "  pinned: " << pinned.substr(0,16) << "... new: " << peer_fp.substr(0,16) << "...\n";
-    std::cerr << "  aborting to be safe. Delete pins.txt line to re-pin.\n";
+    std::cerr << "  aborting to be safe. Delete the pins.txt line to re-pin.\n";
     return 1;
   }
-  if (pinned.empty()) {
-    save_pin(key, peer_fp);
-    std::cout << "[TOFU] pinned peer for room '" << room << "'\n";
+  if (pin == PinResult::Pinned) {
+    std::cout << "[TOFU] pinned peer for room '" << room << "' (fp " << peer_fp.substr(0,16)
+              << "...). VERIFY this fingerprint with your peer out-of-band.\n";
+  } else {
+    std::cout << "[TOFU] peer fingerprint matches the pinned entry for room '" << room << "'.\n";
   }
 
   std::cout << "Type messages, Ctrl-D to quit\n";

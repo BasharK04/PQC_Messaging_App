@@ -6,8 +6,12 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/beast/ssl.hpp>
 #include <boost/asio/ssl.hpp>
+#include <boost/asio/ssl/host_name_verification.hpp>
 #include <cstdlib>
+#include <iostream>
 #include <string>
+
+#include <openssl/ssl.h>
 
 namespace {
 struct ParsedUrl {
@@ -46,18 +50,45 @@ struct BeastWebSocketTransport::Impl {
   std::unique_ptr<boost::beast::websocket::stream<boost::beast::tcp_stream>> ws;
   ParsedUrl u;
   bool open = false;
+  bool allow_insecure_tls = false;
 
   bool connect(const std::string& url) {
     if (!parse_ws_url(url, u)) return false;
     using tcp = boost::asio::ip::tcp;
+    namespace ssl = boost::asio::ssl;
     tcp::resolver resolver(ioc);
     auto results = resolver.resolve(u.host, u.port);
 
     if (u.scheme == "wss") {
-      ssl_ctx = std::make_unique<boost::asio::ssl::context>(boost::asio::ssl::context::tls_client);
+      ssl_ctx = std::make_unique<ssl::context>(ssl::context::tls_client);
+      if (allow_insecure_tls) {
+        // Dev-only: accept any certificate. Loud warning so it can never pass
+        // silently in a real deployment.
+        std::cerr << "[WARNING] --insecure: TLS certificate verification is "
+                     "DISABLED for " << u.host << ". Do NOT use against a real relay.\n";
+        ssl_ctx->set_verify_mode(ssl::verify_none);
+      } else {
+        // Secure default: verify the peer chain against the system trust store
+        // and require the certificate to match the hostname.
+        ssl_ctx->set_verify_mode(ssl::verify_peer);
+        ssl_ctx->set_default_verify_paths();
+      }
       wss = std::make_unique<boost::beast::websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>>>(ioc, *ssl_ctx);
+
+      // SNI: many servers (and cert validation) require the hostname in the
+      // ClientHello. Failure to set it is fatal.
+      if (!SSL_set_tlsext_host_name(wss->next_layer().native_handle(), u.host.c_str())) {
+        throw boost::system::system_error(
+            static_cast<int>(::ERR_get_error()),
+            boost::asio::error::get_ssl_category(),
+            "SSL_set_tlsext_host_name (SNI) failed");
+      }
+      if (!allow_insecure_tls) {
+        wss->next_layer().set_verify_callback(ssl::host_name_verification(u.host));
+      }
+
       boost::beast::get_lowest_layer(*wss).connect(results);
-      wss->next_layer().handshake(boost::asio::ssl::stream_base::client);
+      wss->next_layer().handshake(ssl::stream_base::client);
       wss->set_option(boost::beast::websocket::stream_base::timeout::suggested(boost::beast::role_type::client));
       wss->handshake(u.host, u.target);
       open = true;
@@ -115,7 +146,17 @@ struct BeastWebSocketTransport::Impl {
 BeastWebSocketTransport::BeastWebSocketTransport() : impl_(new Impl) {}
 BeastWebSocketTransport::~BeastWebSocketTransport() { close(); delete impl_; }
 
-bool BeastWebSocketTransport::connect_url(const std::string& url) { return impl_->connect(url); }
+bool BeastWebSocketTransport::connect_url(const std::string& url) {
+  try {
+    return impl_->connect(url);
+  } catch (const std::exception& ex) {
+    // TLS certificate/hostname verification failures land here; surface as a
+    // clean connect failure instead of an uncaught exception.
+    std::cerr << "[transport] connect failed: " << ex.what() << "\n";
+    return false;
+  }
+}
 bool BeastWebSocketTransport::send(const std::vector<uint8_t>& data) { return impl_->send(data); }
 bool BeastWebSocketTransport::recv(std::vector<uint8_t>& out) { return impl_->recv(out); }
 void BeastWebSocketTransport::close() { impl_->close(); }
+void BeastWebSocketTransport::set_insecure_tls(bool allow) { impl_->allow_insecure_tls = allow; }

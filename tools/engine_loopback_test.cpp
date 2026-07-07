@@ -13,6 +13,7 @@
 
 #include "connection_engine.h"
 #include "envelope.pb.h"
+#include "handshake.pb.h"
 #include "messages.pb.h"
 
 // Re-encode a frame with the inner ChatMessage's sender_id mutated. This flips a
@@ -33,6 +34,23 @@ static bool tamper_sender_id(const std::vector<uint8_t>& in,
   std::string env_bytes;
   if (!env.SerializeToString(&env_bytes)) return false;
   out.assign(env_bytes.begin(), env_bytes.end());
+  return true;
+}
+
+// Flip a bit in the HandshakeResponse's key-confirmation MAC ONLY (the field
+// the server signature does not cover). A correct client must still verify the
+// server signature (valid) but then reject on the confirmation mismatch.
+static bool tamper_response_confirm(const std::vector<uint8_t>& in,
+                                    std::vector<uint8_t>& out) {
+  HandshakeResponse resp;
+  if (!resp.ParseFromArray(in.data(), static_cast<int>(in.size()))) return false;
+  std::string c = resp.confirm();
+  if (c.empty()) return false;
+  c[0] ^= 0x01;
+  resp.set_confirm(c);
+  std::string bytes;
+  if (!resp.SerializeToString(&bytes)) return false;
+  out.assign(bytes.begin(), bytes.end());
   return true;
 }
 
@@ -169,6 +187,56 @@ int main() {
       std::cerr << "SECURITY FAIL: AAD-tampered frame was accepted\n"; return 1;
     }
     std::cout << "AAD tamper correctly rejected: " << err << "\n";
+  }
+
+  // ---- 4) A tampered server key-confirmation must be REJECTED by the client ----
+  // Runs a fresh 3-message handshake but flips the server's confirmation MAC in
+  // flight. The server signature (over the transcript hash H) still verifies, so
+  // this specifically exercises the HMAC key-confirmation step (item 3).
+  {
+    ConnectionEngine client2, server2;
+    std::string e;
+    bool cr = false;
+    std::string fpc2, fps2;
+    if (!client2.loadOrCreateIdentity(client_id, pw, fpc2, e, &cr) ||
+        !server2.loadOrCreateIdentity(server_id, pw, fps2, e, &cr)) {
+      std::cerr << "neg-test identity error: " << e << "\n"; return 1;
+    }
+
+    Channel nc2s, ns2c;
+    auto ns_send = [&](const std::vector<uint8_t>& f){ return send_to(ns2c, f); };
+    auto ns_recv = [&](std::vector<uint8_t>& f){ return recv_from(nc2s, f); };
+    auto nc_send = [&](const std::vector<uint8_t>& f){ return send_to(nc2s, f); };
+    // The client's only received frame during the handshake is the response; we
+    // corrupt its confirmation MAC before handing it to the engine.
+    auto nc_recv = [&](std::vector<uint8_t>& f){
+      std::vector<uint8_t> raw;
+      if (!recv_from(ns2c, raw)) return false;
+      std::vector<uint8_t> tampered;
+      f = tamper_response_confirm(raw, tampered) ? tampered : raw;
+      return true;
+    };
+
+    std::string serr;
+    std::thread th_s([&]{
+      std::string peer;
+      server2.runServerHandshake(ns_send, ns_recv, peer, serr);
+      { std::lock_guard<std::mutex> lk(nc2s.mtx); nc2s.closed = true; nc2s.cv.notify_all(); }
+      { std::lock_guard<std::mutex> lk(ns2c.mtx); ns2c.closed = true; ns2c.cv.notify_all(); }
+    });
+
+    std::string peer2, cerr;
+    bool ok2 = client2.runClientHandshake(nc_send, nc_recv, peer2, cerr);
+    // Unblock the server thread even though the client aborted before msg 3.
+    { std::lock_guard<std::mutex> lk(nc2s.mtx); nc2s.closed = true; nc2s.cv.notify_all(); }
+    { std::lock_guard<std::mutex> lk(ns2c.mtx); ns2c.closed = true; ns2c.cv.notify_all(); }
+    th_s.join();
+
+    if (ok2) {
+      std::cerr << "SECURITY FAIL: client accepted a tampered key confirmation\n";
+      return 1;
+    }
+    std::cout << "tampered key-confirmation correctly rejected: " << cerr << "\n";
   }
 
   std::cout << "ALL CHECKS PASSED\n";

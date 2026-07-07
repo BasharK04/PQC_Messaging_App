@@ -53,6 +53,8 @@ add_library(engine
   connection_engine.h
   beast_ws_transport.cpp
   beast_ws_transport.h
+  pin_store.cpp
+  pin_store.h
 )
 target_link_libraries(engine PUBLIC
   Boost::system

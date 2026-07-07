@@ -15,6 +15,12 @@ public:
   bool recv(std::vector<uint8_t>& out);
   void close();
 
+  // DANGEROUS dev-only escape hatch. When set to true BEFORE connect_url(), a
+  // wss:// connection skips certificate/hostname verification (verify_none) so
+  // self-signed relays can be used during development. The default is secure
+  // verification; only enable this for a trusted, local dev relay.
+  void set_insecure_tls(bool allow);
+
 private:
   struct Impl;
   Impl* impl_ = nullptr;

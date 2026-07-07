@@ -1,17 +1,23 @@
 syntax = "proto3";
 
-// Client -> Server
+// Msg 1: Client -> Server
 message HandshakeHello {
   bytes kem_public_key = 1;   // Kyber-512 pk
-  uint32 version       = 2;   // 1
+  uint32 version       = 2;   // protocol::kVersion
   bytes identity_pub   = 3;   // Ed25519 long-term public key (32 bytes)
-  bytes identity_sig   = 4;   // Sig over context || kem_public_key
+  bytes identity_sig   = 4;   // Ed25519 sig over "E2EE-HS-v1|client|" || version || lp(id_pub) || lp(kem_pk)
 }
 
-// Server -> Client
+// Msg 2: Server -> Client
 message HandshakeResponse {
   bytes kem_ciphertext = 1;   // Kyber-512 ct
-  uint32 version       = 2;   // 1
+  uint32 version       = 2;   // protocol::kVersion
   bytes identity_pub   = 3;   // Server Ed25519 public key
-  bytes identity_sig   = 4;   // Sig over context || kem_ciphertext || client_kem_public_key
+  bytes identity_sig   = 4;   // Ed25519 sig over "E2EE-HS-v1|server|" || H (full transcript hash)
+  bytes confirm        = 5;   // HMAC(k_confirm, "s" || H) — server key confirmation
+}
+
+// Msg 3: Client -> Server
+message HandshakeConfirm {
+  bytes confirm = 1;          // HMAC(k_confirm, "c" || H) — client key confirmation
 }

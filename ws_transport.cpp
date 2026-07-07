@@ -1,6 +1,8 @@
 #include "ws_transport.h"
 #include <QEventLoop>
 #include <QTimer>
+#include <QSslConfiguration>
+#include <QSslSocket>
 
 WebSocketTransport::WebSocketTransport() {
   socket_.setParent(nullptr); // lives in current thread (EngineWorker's thread)
@@ -34,6 +36,16 @@ WebSocketTransport::~WebSocketTransport() {
 
 bool WebSocketTransport::connect_url(const std::string& wsUrl, int timeout_ms) {
   QUrl url(QString::fromStdString(wsUrl));
+
+  // Explicitly require full peer (certificate + hostname) verification for
+  // wss://. This is Qt's default, but we set it defensively so no future change
+  // can silently weaken it. We deliberately do NOT connect any handler to
+  // QWebSocket::sslErrors / call ignoreSslErrors(), so an invalid or
+  // self-signed certificate aborts the connection.
+  QSslConfiguration ssl = socket_.sslConfiguration();
+  ssl.setPeerVerifyMode(QSslSocket::VerifyPeer);
+  socket_.setSslConfiguration(ssl);
+
   socket_.open(url);
 
   QEventLoop loop;
