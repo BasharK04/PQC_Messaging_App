@@ -1,6 +1,16 @@
 // Specifies that we are using the proto3 syntax, which is the modern version.
 syntax = "proto3";
 
+// Discriminates the meaning of a ChatMessage's encrypted_content. Absent/0 is
+// treated as KIND_TEXT so old text-only peers stay wire-compatible.
+enum ContentKind {
+  KIND_UNSPECIFIED = 0;  // treated as KIND_TEXT for backward compatibility
+  KIND_TEXT        = 1;  // encrypted_content = UTF-8 chat text
+  KIND_FILE_OFFER  = 2;  // encrypted_content = serialized FileMeta
+  KIND_FILE_CHUNK  = 3;  // encrypted_content = raw file chunk bytes
+  KIND_FILE_FIN    = 4;  // encrypted_content = empty; end-of-transfer marker
+}
+
 // This is the definition of our chat message structure.
 // It's like defining a class or a struct.
 message ChatMessage {
@@ -9,7 +19,7 @@ message ChatMessage {
 
   // Field 2: The encrypted content of the message (was plaintext before).
   bytes encrypted_content = 2;
-  
+
   // Field 3: The nonce/IV used for encryption (needed for decryption).
   bytes nonce = 3;
 
@@ -20,4 +30,26 @@ message ChatMessage {
   // AEAD AAD and enforced strictly increasing by the receiver to reject replays
   // and reordering.
   uint64 seq = 5;
+
+  // Field 6: ContentKind discriminator. Absent/0 is treated as KIND_TEXT so this
+  // stays compatible with peers that only ever sent text messages.
+  uint32 kind = 6;
+
+  // Field 7: Random 64-bit transfer id chosen by the sender, identical across
+  // every message (offer/chunk/fin) of a single file transfer. 0 for text.
+  uint64 transfer_id = 7;
+
+  // Field 8: 0-based chunk index; only meaningful for KIND_FILE_CHUNK. 0 for
+  // text/offer/fin. Bound into the AEAD AAD so the relay cannot reorder chunks.
+  uint64 chunk_index = 8;
+}
+
+// Metadata for a file transfer, carried INSIDE the encrypted KIND_FILE_OFFER
+// payload so the filename and the whole-file HMAC stay confidential from the relay.
+message FileMeta {
+  string filename    = 1;  // sender-supplied name (receiver sanitizes to a basename)
+  uint64 size_bytes  = 2;  // total plaintext file size
+  uint64 chunk_count = 3;  // number of KIND_FILE_CHUNK messages that follow
+  uint32 chunk_bytes = 4;  // nominal chunk size (kFileChunkBytes); last chunk may be smaller
+  bytes  file_hmac   = 5;  // HMAC-SHA256(k_file, whole plaintext file)
 }

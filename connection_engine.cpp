@@ -1,13 +1,16 @@
 #include "connection_engine.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <system_error>
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/rand.h>
 #include <openssl/sha.h>
 
 #include "envelope.pb.h"
@@ -16,6 +19,7 @@
 #include "kem_kyber.h"
 #include "messages.pb.h"
 #include "crypto.h"
+#include "file_transfer.h"
 #include "protocol.h"
 
 namespace {
@@ -130,24 +134,75 @@ std::vector<uint8_t> confirmMsg(char tag, const std::vector<uint8_t>& H) {
 }
 
 // Canonical authenticated header bound as AES-GCM AAD. Both sides reconstruct it
-// identically from: direction tag, sequence number, sender id, timestamp. The
-// sender_id is length-prefixed so it can never collide with adjacent fields.
+// identically from: direction tag, sequence number, sender id, timestamp, content
+// kind, transfer id and chunk index. The sender_id is length-prefixed so it can
+// never collide with adjacent fields. kind/transferId/chunkIndex are all 0 for
+// plain text messages; for file messages they bind the chunk's position and the
+// transfer it belongs to into the GCM tag, so a relay can neither reorder chunks
+// within a transfer nor splice chunks across transfers.
 std::vector<uint8_t> buildMessageAad(uint8_t dirTag,
                                      uint64_t seq,
                                      const std::string& senderId,
-                                     int64_t timestamp) {
+                                     int64_t timestamp,
+                                     uint8_t kind,
+                                     uint64_t transferId,
+                                     uint64_t chunkIndex) {
   std::vector<uint8_t> aad;
-  aad.reserve(1 + 8 + 4 + senderId.size() + 8);
+  aad.reserve(1 + 8 + 4 + senderId.size() + 8 + 1 + 8 + 8);
   aad.push_back(dirTag);
   put_u64_be(aad, seq);
   put_u32_be(aad, static_cast<uint32_t>(senderId.size()));
   aad.insert(aad.end(), senderId.begin(), senderId.end());
   put_u64_be(aad, static_cast<uint64_t>(timestamp));
+  aad.push_back(kind);
+  put_u64_be(aad, transferId);
+  put_u64_be(aad, chunkIndex);
   return aad;
+}
+
+// Random nonzero 64-bit transfer id (0 is reserved for "not a file transfer").
+uint64_t randomTransferId() {
+  uint64_t v = 0;
+  do {
+    uint8_t b[8];
+    if (RAND_bytes(b, static_cast<int>(sizeof(b))) != 1) {
+      throw std::runtime_error("RAND_bytes failed");
+    }
+    v = 0;
+    for (size_t i = 0; i < sizeof(b); ++i) v = (v << 8) | b[i];
+  } while (v == 0);
+  return v;
 }
 }  // namespace
 
+// Reduce a possibly-hostile filename (it arrives inside an attacker-controllable
+// FileMeta) to a safe basename. Strips every path component (both '/' and '\\'
+// separators) and rejects anything that could still escape the downloads
+// directory. Returns "" when no safe basename exists; callers must treat "" as
+// "reject the transfer".
+std::string sanitize_filename(const std::string& raw) {
+  if (raw.find('\0') != std::string::npos) return "";
+  const size_t pos = raw.find_last_of("/\\");
+  std::string base = (pos == std::string::npos) ? raw : raw.substr(pos + 1);
+  if (base.empty() || base == "." || base == "..") return "";
+  return base;
+}
+
 ConnectionEngine::ConnectionEngine() = default;
+
+ConnectionEngine::~ConnectionEngine() {
+  // Drop any half-received transfers: close streams and delete partial files.
+  while (!inbound_.empty()) abortInboundTransfer(inbound_.begin()->first);
+}
+
+void ConnectionEngine::abortInboundTransfer(uint64_t transferId) {
+  auto it = inbound_.find(transferId);
+  if (it == inbound_.end()) return;
+  if (it->second.out.is_open()) it->second.out.close();
+  std::error_code ec;
+  std::filesystem::remove(it->second.tempPath, ec);  // best effort
+  inbound_.erase(it);
+}
 
 bool ConnectionEngine::loadOrCreateIdentity(const std::string& path,
                                             const std::string& password,
@@ -186,31 +241,39 @@ bool ConnectionEngine::runServerHandshake(const SendFrameFn& send,
   return serverHandshakeInternal(send, recv, peerFingerprintOut, errorOut);
 }
 
-bool ConnectionEngine::encryptAndSerializeMessage(const std::string& plaintext,
-                                                  const std::string& senderId,
-                                                  const std::string& toUsername,
-                                                  std::vector<uint8_t>& outBytes,
-                                                  std::string& errorOut) {
+bool ConnectionEngine::encryptAndSerializeKind(uint32_t kind,
+                                               uint64_t transferId,
+                                               uint64_t chunkIndex,
+                                               const std::vector<uint8_t>& plaintext,
+                                               const std::string& senderId,
+                                               const std::string& toUsername,
+                                               std::vector<uint8_t>& outBytes,
+                                               std::string& errorOut) {
   if (!sessionReady_) {
     errorOut = "Session key not established";
     return false;
   }
   try {
     // Stamp a fresh monotonic sequence number and current timestamp, then bind
-    // the direction + seq + sender + timestamp into the AEAD AAD.
+    // direction + seq + sender + timestamp + kind + transfer id + chunk index
+    // into the AEAD AAD. Text and file messages share one seq space, so a relay
+    // can neither drop nor reorder file chunks relative to chat traffic.
     const uint64_t seq = session_.next_send_seq();
     const int64_t ts = nowSeconds();
     const uint8_t dirTag = (role_ == Role::Server) ? kDirS2C : kDirC2S;
-    const auto aad = buildMessageAad(dirTag, seq, senderId, ts);
+    const auto aad = buildMessageAad(dirTag, seq, senderId, ts,
+                                     static_cast<uint8_t>(kind), transferId, chunkIndex);
 
-    std::vector<uint8_t> plain(plaintext.begin(), plaintext.end());
     auto nonce = AESGCMCrypto::random_nonce();
-    auto ct_tag = session_.encrypt(plain, nonce, aad);
+    auto ct_tag = session_.encrypt(plaintext, nonce, aad);
 
     ChatMessage inner;
     inner.set_sender_id(senderId);
     inner.set_timestamp_unix(ts);
     inner.set_seq(seq);
+    inner.set_kind(kind);
+    inner.set_transfer_id(transferId);
+    inner.set_chunk_index(chunkIndex);
     inner.set_nonce(reinterpret_cast<const char*>(nonce.data()), nonce.size());
     inner.set_encrypted_content(reinterpret_cast<const char*>(ct_tag.data()), ct_tag.size());
 
@@ -240,9 +303,179 @@ bool ConnectionEngine::encryptAndSerializeMessage(const std::string& plaintext,
   }
 }
 
-bool ConnectionEngine::parseAndDecryptMessage(const std::vector<uint8_t>& frame,
-                                              std::string& plaintextOut,
-                                              std::string& errorOut) {
+bool ConnectionEngine::encryptAndSerializeMessage(const std::string& plaintext,
+                                                  const std::string& senderId,
+                                                  const std::string& toUsername,
+                                                  std::vector<uint8_t>& outBytes,
+                                                  std::string& errorOut) {
+  // Chat text is just KIND_TEXT with no transfer identity. The real kind is
+  // written on the wire AND bound into the AAD, so an attacker cannot re-label a
+  // text message as a file chunk (or vice versa) without breaking the GCM tag.
+  return encryptAndSerializeKind(static_cast<uint32_t>(KIND_TEXT), 0, 0,
+                                 std::vector<uint8_t>(plaintext.begin(), plaintext.end()),
+                                 senderId, toUsername, outBytes, errorOut);
+}
+
+bool ConnectionEngine::sendFile(const std::string& path,
+                                const std::string& senderId,
+                                const std::string& toUsername,
+                                const SendFrameFn& send,
+                                const ProgressFn& progress,
+                                std::string& errorOut) {
+  if (!sessionReady_) {
+    errorOut = "Session key not established";
+    return false;
+  }
+  if (session_.file_key().empty()) {
+    errorOut = "file key not established for this session";
+    return false;
+  }
+  try {
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(path, ec) || ec) {
+      errorOut = "not a regular file: " + path;
+      return false;
+    }
+    const auto fsize = std::filesystem::file_size(path, ec);
+    if (ec) {
+      errorOut = "cannot determine size of " + path + ": " + ec.message();
+      return false;
+    }
+    const uint64_t totalBytes = static_cast<uint64_t>(fsize);
+    if (totalBytes == 0) {
+      errorOut = "refusing to send an empty file: " + path;
+      return false;
+    }
+
+    const std::string base = sanitize_filename(std::filesystem::path(path).filename().string());
+    if (base.empty()) {
+      errorOut = "cannot derive a safe filename from: " + path;
+      return false;
+    }
+
+    const uint64_t chunkBytes = static_cast<uint64_t>(kFileChunkBytes);
+    const uint64_t chunkCount =
+        totalBytes / chunkBytes + ((totalBytes % chunkBytes) ? 1 : 0);
+
+    // Pass 1: stream the plaintext through HMAC-SHA256(k_file) so the receiver
+    // can verify the whole file. Nothing but one chunk buffer is ever resident.
+    std::vector<uint8_t> fileHmac;
+    {
+      std::ifstream in(path, std::ios::binary);
+      if (!in) {
+        errorOut = "cannot open file for reading: " + path;
+        return false;
+      }
+      HmacSha256Stream mac(session_.file_key());
+      std::vector<uint8_t> buf(kFileChunkBytes);
+      uint64_t hashed = 0;
+      while (in.read(reinterpret_cast<char*>(buf.data()),
+                     static_cast<std::streamsize>(buf.size())) ||
+             in.gcount() > 0) {
+        const uint64_t got = static_cast<uint64_t>(in.gcount());
+        if (got == 0) break;
+        if (hashed + got > totalBytes) {
+          errorOut = "file changed size while it was being sent: " + path;
+          return false;
+        }
+        mac.update(buf.data(), static_cast<std::size_t>(got));
+        hashed += got;
+      }
+      if (in.bad()) {
+        errorOut = "read error while hashing " + path;
+        return false;
+      }
+      if (hashed != totalBytes) {
+        errorOut = "file changed size while it was being sent: " + path;
+        return false;
+      }
+      fileHmac = mac.final_tag();
+    }
+
+    const uint64_t transferId = randomTransferId();
+
+    // The offer (filename + size + whole-file HMAC) travels INSIDE the encrypted
+    // payload, so the relay never learns what is being transferred.
+    FileMeta meta;
+    meta.set_filename(base);
+    meta.set_size_bytes(totalBytes);
+    meta.set_chunk_count(chunkCount);
+    meta.set_chunk_bytes(static_cast<uint32_t>(chunkBytes));
+    meta.set_file_hmac(reinterpret_cast<const char*>(fileHmac.data()), fileHmac.size());
+
+    std::string meta_bytes;
+    if (!meta.SerializeToString(&meta_bytes)) {
+      errorOut = "Failed to serialize FileMeta";
+      return false;
+    }
+
+    std::vector<uint8_t> frame;
+    if (!encryptAndSerializeKind(static_cast<uint32_t>(KIND_FILE_OFFER), transferId, 0,
+                                 std::vector<uint8_t>(meta_bytes.begin(), meta_bytes.end()),
+                                 senderId, toUsername, frame, errorOut)) {
+      return false;
+    }
+    if (!send(frame)) {
+      errorOut = "failed to send file offer for " + base;
+      return false;
+    }
+
+    // Pass 2: re-read and ship the chunks.
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+      errorOut = "cannot reopen file for reading: " + path;
+      return false;
+    }
+    std::vector<uint8_t> buf(kFileChunkBytes);
+    uint64_t sent = 0;
+    uint64_t index = 0;
+    while (sent < totalBytes) {
+      const uint64_t want = std::min<uint64_t>(chunkBytes, totalBytes - sent);
+      in.read(reinterpret_cast<char*>(buf.data()), static_cast<std::streamsize>(want));
+      if (static_cast<uint64_t>(in.gcount()) != want) {
+        errorOut = "file changed size while it was being sent: " + path;
+        return false;
+      }
+      std::vector<uint8_t> chunk(buf.begin(),
+                                 buf.begin() + static_cast<std::ptrdiff_t>(want));
+      if (!encryptAndSerializeKind(static_cast<uint32_t>(KIND_FILE_CHUNK), transferId, index,
+                                   chunk, senderId, toUsername, frame, errorOut)) {
+        return false;
+      }
+      if (!send(frame)) {
+        errorOut = "failed to send file chunk " + std::to_string(index) + " of " + base;
+        return false;
+      }
+      sent += want;
+      ++index;
+      if (progress) progress(sent, totalBytes);
+    }
+    // A file that grew between the two passes would desynchronise the HMAC the
+    // receiver is about to check; fail loudly instead of shipping a bad file.
+    if (index != chunkCount || in.peek() != std::char_traits<char>::eof()) {
+      errorOut = "file changed size while it was being sent: " + path;
+      return false;
+    }
+
+    if (!encryptAndSerializeKind(static_cast<uint32_t>(KIND_FILE_FIN), transferId, 0,
+                                 std::vector<uint8_t>(), senderId, toUsername, frame,
+                                 errorOut)) {
+      return false;
+    }
+    if (!send(frame)) {
+      errorOut = "failed to send file completion for " + base;
+      return false;
+    }
+    return true;
+  } catch (const std::exception& ex) {
+    errorOut = ex.what();
+    return false;
+  }
+}
+
+bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
+                                            IncomingEvent& ev,
+                                            std::string& errorOut) {
   if (!sessionReady_) {
     errorOut = "Session key not established";
     return false;
@@ -271,9 +504,12 @@ bool ConnectionEngine::parseAndDecryptMessage(const std::vector<uint8_t>& frame,
   }
 
   // Reconstruct the SAME AAD the sender bound; the peer's sending direction is
-  // the opposite of ours.
+  // the opposite of ours. The kind/transfer id/chunk index come straight off the
+  // wire (never normalised) so any tampering with them fails tag verification.
   const uint8_t dirTag = (role_ == Role::Server) ? kDirC2S : kDirS2C;
-  const auto aad = buildMessageAad(dirTag, seq, inner.sender_id(), ts);
+  const auto aad = buildMessageAad(dirTag, seq, inner.sender_id(), ts,
+                                   static_cast<uint8_t>(inner.kind()),
+                                   inner.transfer_id(), inner.chunk_index());
 
   std::vector<uint8_t> nonce(inner.nonce().begin(), inner.nonce().end());
   std::vector<uint8_t> ct_tag(inner.encrypted_content().begin(), inner.encrypted_content().end());
@@ -294,7 +530,258 @@ bool ConnectionEngine::parseAndDecryptMessage(const std::vector<uint8_t>& frame,
     return false;
   }
 
-  plaintextOut.assign(plain.begin(), plain.end());
+  ev = IncomingEvent{};
+  const uint32_t kind = inner.kind();
+  const uint64_t transferId = inner.transfer_id();
+
+  // KIND_UNSPECIFIED (0) is treated as text for wire compatibility with peers
+  // that predate the file-transfer kinds.
+  if (kind == static_cast<uint32_t>(KIND_UNSPECIFIED) ||
+      kind == static_cast<uint32_t>(KIND_TEXT)) {
+    ev.type = IncomingEvent::Type::Text;
+    ev.text.assign(plain.begin(), plain.end());
+    return true;
+  }
+
+  if (kind == static_cast<uint32_t>(KIND_FILE_OFFER)) {
+    if (transferId == 0) {
+      errorOut = "file offer with reserved transfer id 0";
+      return false;
+    }
+    if (inbound_.find(transferId) != inbound_.end()) {
+      errorOut = "duplicate transfer id in file offer";
+      return false;
+    }
+    if (session_.file_key().empty()) {
+      errorOut = "file key not established for this session";
+      return false;
+    }
+
+    FileMeta meta;
+    if (!meta.ParseFromArray(plain.data(), static_cast<int>(plain.size()))) {
+      errorOut = "Malformed FileMeta in file offer";
+      return false;
+    }
+
+    // The filename is fully attacker-controlled: reduce it to a basename and
+    // reject anything that could escape the downloads directory.
+    const std::string base = sanitize_filename(meta.filename());
+    if (base.empty()) {
+      errorOut = "unsafe filename in file offer";
+      return false;
+    }
+
+    const uint32_t chunkBytes = meta.chunk_bytes();
+    if (chunkBytes == 0 || chunkBytes > kFileChunkBytes) {
+      errorOut = "invalid chunk size in file offer";
+      return false;
+    }
+    const uint64_t sizeBytes = meta.size_bytes();
+    if (sizeBytes == 0) {
+      errorOut = "invalid file size in file offer";
+      return false;
+    }
+    // Recompute the chunk count instead of trusting it (division first so a
+    // huge declared size cannot overflow the round-up).
+    const uint64_t expectedChunks =
+        sizeBytes / chunkBytes + ((sizeBytes % chunkBytes) ? 1 : 0);
+    if (meta.chunk_count() != expectedChunks) {
+      errorOut = "inconsistent chunk count in file offer";
+      return false;
+    }
+    if (meta.file_hmac().size() != 32) {
+      errorOut = "invalid file HMAC in file offer";
+      return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(downloadDir_, ec);
+    if (!std::filesystem::is_directory(downloadDir_)) {
+      errorOut = "cannot create downloads directory " + downloadDir_ +
+                 (ec ? (": " + ec.message()) : std::string());
+      return false;
+    }
+
+    std::filesystem::path finalPath = std::filesystem::path(downloadDir_) / base;
+    if (std::filesystem::exists(finalPath)) {
+      // Never clobber an existing download; disambiguate with the transfer id.
+      finalPath = std::filesystem::path(downloadDir_) /
+                  (std::to_string(transferId) + "_" + base);
+    }
+
+    InboundTransfer t;
+    t.filename = base;
+    t.finalPath = finalPath.string();
+    t.tempPath = t.finalPath + ".part";
+    t.sizeBytes = sizeBytes;
+    t.chunkCount = expectedChunks;
+    t.chunkBytes = chunkBytes;
+    t.expectedHmac.assign(meta.file_hmac().begin(), meta.file_hmac().end());
+    t.out.open(t.tempPath, std::ios::binary | std::ios::trunc);
+    if (!t.out) {
+      errorOut = "cannot open " + t.tempPath + " for writing";
+      return false;
+    }
+    try {
+      t.hmac = std::make_unique<HmacSha256Stream>(session_.file_key());
+    } catch (const std::exception& ex) {
+      t.out.close();
+      std::filesystem::remove(t.tempPath, ec);
+      errorOut = ex.what();
+      return false;
+    }
+
+    ev.type = IncomingEvent::Type::FileOffer;
+    ev.filename = t.filename;
+    ev.transferId = transferId;
+    ev.sizeBytes = t.sizeBytes;
+    ev.chunkCount = t.chunkCount;
+    inbound_.emplace(transferId, std::move(t));
+    return true;
+  }
+
+  if (kind == static_cast<uint32_t>(KIND_FILE_CHUNK)) {
+    auto it = inbound_.find(transferId);
+    if (it == inbound_.end()) {
+      errorOut = "file chunk for an unknown transfer";
+      return false;
+    }
+    InboundTransfer& t = it->second;
+    const uint64_t idx = inner.chunk_index();
+    const uint64_t len = static_cast<uint64_t>(plain.size());
+
+    // Chunks must arrive in exactly the order they were produced, and the
+    // declared geometry from the offer is the only thing we will write.
+    if (idx != t.nextChunkIndex || idx >= t.chunkCount) {
+      abortInboundTransfer(transferId);
+      errorOut = "out-of-order file chunk";
+      return false;
+    }
+    const bool isFinal = (idx + 1 == t.chunkCount);
+    if (len == 0 || len > t.chunkBytes || (!isFinal && len != t.chunkBytes) ||
+        t.bytesWritten + len > t.sizeBytes) {
+      abortInboundTransfer(transferId);
+      errorOut = "file chunk size does not match the offer";
+      return false;
+    }
+
+    t.out.write(reinterpret_cast<const char*>(plain.data()),
+                static_cast<std::streamsize>(len));
+    if (!t.out) {
+      const std::string tmp = t.tempPath;
+      abortInboundTransfer(transferId);
+      errorOut = "failed writing to " + tmp;
+      return false;
+    }
+    try {
+      t.hmac->update(plain.data(), plain.size());
+    } catch (const std::exception& ex) {
+      abortInboundTransfer(transferId);
+      errorOut = ex.what();
+      return false;
+    }
+    t.nextChunkIndex = idx + 1;
+    t.bytesWritten += len;
+
+    ev.type = IncomingEvent::Type::FileChunk;
+    ev.filename = t.filename;
+    ev.transferId = transferId;
+    ev.sizeBytes = t.sizeBytes;
+    ev.chunkIndex = idx;
+    ev.chunkCount = t.chunkCount;
+    return true;
+  }
+
+  if (kind == static_cast<uint32_t>(KIND_FILE_FIN)) {
+    auto it = inbound_.find(transferId);
+    if (it == inbound_.end()) {
+      errorOut = "file completion for an unknown transfer";
+      return false;
+    }
+    InboundTransfer& t = it->second;
+    if (!plain.empty() || t.nextChunkIndex != t.chunkCount ||
+        t.bytesWritten != t.sizeBytes) {
+      abortInboundTransfer(transferId);
+      errorOut = "incomplete file transfer";
+      return false;
+    }
+
+    t.out.flush();
+    t.out.close();
+    if (!t.out) {
+      const std::string tmp = t.tempPath;
+      abortInboundTransfer(transferId);
+      errorOut = "failed to finalize " + tmp;
+      return false;
+    }
+
+    std::vector<uint8_t> tag;
+    try {
+      tag = t.hmac->final_tag();
+    } catch (const std::exception& ex) {
+      abortInboundTransfer(transferId);
+      errorOut = ex.what();
+      return false;
+    }
+    // Constant-time compare of the whole-file HMAC; a mismatch means the file
+    // was corrupted or tampered with, so the partial file is deleted.
+    if (tag.size() != t.expectedHmac.size() ||
+        CRYPTO_memcmp(tag.data(), t.expectedHmac.data(), tag.size()) != 0) {
+      abortInboundTransfer(transferId);
+      errorOut = "file integrity check failed";
+      return false;
+    }
+
+    const std::string filename = t.filename;
+    const std::string tempPath = t.tempPath;
+    const std::string finalPath = t.finalPath;
+    const uint64_t sizeBytes = t.sizeBytes;
+    const uint64_t chunkCount = t.chunkCount;
+
+    std::error_code ec;
+    std::filesystem::rename(tempPath, finalPath, ec);
+    if (ec) {
+      abortInboundTransfer(transferId);
+      errorOut = "failed to move the received file into place: " + ec.message();
+      return false;
+    }
+    inbound_.erase(transferId);
+
+    ev.type = IncomingEvent::Type::FileDone;
+    ev.filename = filename;
+    ev.transferId = transferId;
+    ev.sizeBytes = sizeBytes;
+    ev.chunkCount = chunkCount;
+    ev.savedPath = finalPath;
+    return true;
+  }
+
+  errorOut = "unknown message kind " + std::to_string(kind);
+  return false;
+}
+
+bool ConnectionEngine::parseAndDecryptMessage(const std::vector<uint8_t>& frame,
+                                              std::string& plaintextOut,
+                                              std::string& errorOut) {
+  IncomingEvent ev;
+  if (!parseAndDecryptEvent(frame, ev, errorOut)) return false;
+  switch (ev.type) {
+    case IncomingEvent::Type::Text:
+      plaintextOut = ev.text;
+      break;
+    case IncomingEvent::Type::FileOffer:
+      plaintextOut = "[file] incoming " + ev.filename + " (" +
+                     std::to_string(ev.sizeBytes) + " bytes)";
+      break;
+    case IncomingEvent::Type::FileChunk:
+      plaintextOut = "[file] " + ev.filename + " chunk " +
+                     std::to_string(ev.chunkIndex + 1) + "/" +
+                     std::to_string(ev.chunkCount);
+      break;
+    case IncomingEvent::Type::FileDone:
+      plaintextOut = "[file] saved to " + ev.savedPath;
+      break;
+  }
   return true;
 }
 
@@ -376,6 +863,9 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
     auto k_c2s = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_c2s(), 32);
     auto k_s2c = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_s2c(), 32);
     auto k_confirm = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_confirm(), 32);
+    // Independent whole-file HMAC key: same shared secret, different info
+    // string, so a file tag can never be confused with a data-key operation.
+    auto k_file = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_file(), 32);
 
     // Verify the server's key confirmation: proves the server derived the same
     // shared secret (catches a KEM/key mismatch or a swapped ciphertext).
@@ -386,6 +876,7 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
       OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Server key confirmation failed";
       return false;
     }
@@ -401,11 +892,13 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
       OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to serialize HandshakeConfirm";
       return false;
     }
 
     session_.set_keys(k_c2s, k_s2c);
+    session_.set_file_key(k_file);
     role_ = Role::Client;
 
     if (!send(std::vector<uint8_t>(conf_bytes.begin(), conf_bytes.end()))) {
@@ -414,6 +907,7 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
       OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to send HandshakeConfirm";
       return false;
     }
@@ -425,6 +919,7 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
     OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
     OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
     OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+    OPENSSL_cleanse(k_file.data(), k_file.size());
 
     peerFingerprintOut = IdentityStore::fingerprint_hex(server_pub);
     return true;
@@ -485,6 +980,9 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
     auto k_c2s = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_c2s(), 32);
     auto k_s2c = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_s2c(), 32);
     auto k_confirm = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_confirm(), 32);
+    // Independent whole-file HMAC key: same shared secret, different info
+    // string, so a file tag can never be confused with a data-key operation.
+    auto k_file = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_file(), 32);
 
     const auto confirm_s = hmac_sha256(k_confirm, confirmMsg('s', H));
 
@@ -502,6 +1000,7 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
       OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to serialize HandshakeResponse";
       return false;
     }
@@ -510,6 +1009,7 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
       OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to send HandshakeResponse";
       return false;
     }
@@ -522,6 +1022,7 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
       OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to receive HandshakeConfirm";
       return false;
     }
@@ -531,6 +1032,7 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
       OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to parse HandshakeConfirm";
       return false;
     }
@@ -541,6 +1043,7 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
       OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Client key confirmation failed";
       return false;
     }
@@ -548,6 +1051,7 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
     // The server encrypts with k_s2c (send) and decrypts with k_c2s (recv) —
     // mirror of the client.
     session_.set_keys(k_s2c, k_c2s);
+    session_.set_file_key(k_file);
     role_ = Role::Server;
     sessionReady_ = true;
 
@@ -556,6 +1060,7 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
     OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
     OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
     OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+    OPENSSL_cleanse(k_file.data(), k_file.size());
 
     peerFingerprintOut = IdentityStore::fingerprint_hex(client_pub);
     return true;

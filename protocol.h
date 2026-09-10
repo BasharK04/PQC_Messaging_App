@@ -38,5 +38,16 @@ inline const std::vector<uint8_t>& hkdf_info_confirm() {
   static const std::vector<uint8_t> k = {'E','2','E','E','-','v','1','|','c','o','n','f','i','r','m'};
   return k;
 }
+
+// HKDF info label for the whole-file integrity key. Derived from the same KEM
+// shared secret but with a distinct info so it is independent of the directional
+// data keys and the confirmation key. Both sides derive the same k_file, so the
+// sender's HMAC over the plaintext file verifies on the receiver.
+inline const std::vector<uint8_t>& hkdf_info_file() {
+  // "E2EE-v1|file-hmac"
+  static const std::vector<uint8_t> k =
+      {'E','2','E','E','-','v','1','|','f','i','l','e','-','h','m','a','c'};
+  return k;
+}
 } // namespace protocol
 

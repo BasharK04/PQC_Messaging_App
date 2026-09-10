@@ -2,6 +2,9 @@
 #include <vector>
 #include <cstdint>
 #include <stdexcept>
+
+#include <openssl/crypto.h>
+
 #include "crypto.h"
 
 // Directional session state established by the Kyber handshake.
@@ -18,6 +21,20 @@ class Session {
 public:
   Session() = default;
 
+  // Zeroize every key buffer this session ever held. Unlike the ephemeral
+  // handshake material (cleansed right after key derivation), the Session keeps
+  // live keys for the whole connection, so they are wiped only at teardown.
+  ~Session() {
+    if (!sendKey_.empty()) OPENSSL_cleanse(sendKey_.data(), sendKey_.size());
+    if (!recvKey_.empty()) OPENSSL_cleanse(recvKey_.data(), recvKey_.size());
+    if (!fileKey_.empty()) OPENSSL_cleanse(fileKey_.data(), fileKey_.size());
+  }
+
+  // Session owns live key material; copying it would duplicate secrets. Nobody
+  // copies a Session today, so make that explicit rather than leave a footgun.
+  Session(const Session&) = delete;
+  Session& operator=(const Session&) = delete;
+
   // Install the directional keys derived from the handshake.
   void set_keys(const std::vector<uint8_t>& sendKey,
                 const std::vector<uint8_t>& recvKey) {
@@ -25,10 +42,15 @@ public:
     recvKey_ = recvKey;
   }
 
+  // Install the whole-file HMAC key derived from the handshake. Kept alongside
+  // the data keys and wiped only in the destructor.
+  void set_file_key(const std::vector<uint8_t>& fileKey) { fileKey_ = fileKey; }
+
   bool ready() const { return !sendKey_.empty() && !recvKey_.empty(); }
 
   const std::vector<uint8_t>& send_key() const { return sendKey_; }
   const std::vector<uint8_t>& recv_key() const { return recvKey_; }
+  const std::vector<uint8_t>& file_key() const { return fileKey_; }
 
   // Encrypt with the send key; decrypt with the recv key. Optional AAD is bound
   // into the GCM tag so any tampering of the associated metadata is detected.
@@ -66,6 +88,7 @@ public:
 private:
   std::vector<uint8_t> sendKey_;
   std::vector<uint8_t> recvKey_;
+  std::vector<uint8_t> fileKey_;  // whole-file HMAC key (k_file); wiped at teardown
   uint64_t sendSeq_ = 0;      // pre-increment => first sent message is seq 1
   uint64_t lastRecvSeq_ = 0;  // 0 means "nothing accepted yet"; first valid seq is >= 1
 };
