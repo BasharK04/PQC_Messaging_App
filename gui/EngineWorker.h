@@ -24,7 +24,9 @@ public slots:
   void startHost(quint16 port, const QString& password);
 
   // New Relay over WebSocket:
-  // relayUrl: e.g. ws://127.0.0.1:8080   (we append /ws?room=<username>)
+  // relayUrl: e.g. ws://127.0.0.1:8080   (we append /ws?room=<opaque token>,
+  // a token derived from the username via room_token() -- see roomSecret_
+  // below -- never the raw username itself)
   void startRelayHost(const QString& relayUrl, const QString& myUsername, const QString& password);
   void startRelayConnect(const QString& relayUrl, const QString& peerUsername, const QString& password);
 
@@ -58,6 +60,13 @@ private:
   // transports
   TcpTransport tcp_;
   std::unique_ptr<class WebSocketTransport> ws_; // defined in ws_transport.h
+
+  // Out-of-band secret mixed into the relay room token (see room_token.h) so
+  // the relay never sees the real room name/username in the URL or its logs.
+  // The GUI has no input for this yet, so it defaults to empty -- the same
+  // "obfuscated, not secret" caveat documented in room_token.h applies until
+  // a UI is added to set it.
+  QString roomSecret_;
 
   // loop
   std::atomic<bool> running_{false};

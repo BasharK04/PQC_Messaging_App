@@ -7,6 +7,7 @@
 
 #include "ws_transport.h"
 #include "pin_store.h"
+#include "room_token.h"
 
 namespace {
 QString shortenFingerprint(const std::string& fingerprint) {
@@ -155,12 +156,17 @@ void EngineWorker::startHost(quint16 port, const QString& password) {
 
 // --------------- Relay (WebSocket) ---------------
 
-static QString ws_join(const QString& base, const QString& room) {
+// Joins the relay using the opaque room TOKEN derived from (room, roomSecret)
+// via room_token() -- never the raw room name/username -- so the relay's
+// URL/logs never see it. Matches relay_cli.cpp's derivation so a GUI peer
+// and a CLI peer using the same room + room-secret land in the same room.
+static QString ws_join(const QString& base, const QString& room, const QString& roomSecret) {
   QUrl u(base);
   if (u.scheme() == "http") u.setScheme("ws");
   else if (u.scheme() == "https") u.setScheme("wss");
   if (u.path().isEmpty() || u.path() == "/") u.setPath("/ws");
-  QUrlQuery q; q.addQueryItem("room", room); u.setQuery(q);
+  const std::string token = room_token(room.toStdString(), roomSecret.toStdString());
+  QUrlQuery q; q.addQueryItem("room", QString::fromStdString(token)); u.setQuery(q);
   return u.toString();
 }
 
@@ -177,7 +183,7 @@ void EngineWorker::startRelayConnect(const QString& relayUrl, const QString& pee
   emit status(created ? "Identity created." : "Identity loaded.");
   emit identityReady(shortenFingerprint(fingerprint));
 
-  const QString url = ws_join(relayUrl, peerUsername);
+  const QString url = ws_join(relayUrl, peerUsername, roomSecret_);
   emit status("Relay connect to " + url + " ...");
   ws_ = std::make_unique<WebSocketTransport>();
   if (!ws_->connect_url(url.toStdString())) {
@@ -233,7 +239,7 @@ void EngineWorker::startRelayHost(const QString& relayUrl, const QString& myUser
   emit status(created ? "Identity created." : "Identity loaded.");
   emit identityReady(shortenFingerprint(fingerprint));
 
-  const QString url = ws_join(relayUrl, myUsername);
+  const QString url = ws_join(relayUrl, myUsername, roomSecret_);
   emit status("Relay host (listen) at " + url + " ...");
   ws_ = std::make_unique<WebSocketTransport>();
   if (!ws_->connect_url(url.toStdString())) {

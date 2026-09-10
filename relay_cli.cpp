@@ -11,8 +11,11 @@
 #include "connection_engine.h"
 #include "beast_ws_transport.h"
 #include "pin_store.h"
+#include "room_token.h"
 
-static std::string ws_join(const std::string& base, const std::string& room) {
+// Joins the relay using the opaque room TOKEN (derived by room_token()), not
+// the raw room name, so the relay's URL/logs never see the real room name.
+static std::string ws_join(const std::string& base, const std::string& room_token_hex) {
   std::string url = base;
   if (url.rfind("http://", 0) == 0) url.replace(0, 4, "ws");
   else if (url.rfind("https://", 0) == 0) url.replace(0, 5, "wss");
@@ -24,15 +27,20 @@ static std::string ws_join(const std::string& base, const std::string& room) {
     if (hostend == std::string::npos) url += "/ws";
   }
   url += (url.find('?') == std::string::npos ? "?" : "&");
-  url += "room=" + room;
+  url += "room=" + room_token_hex;
   return url;
 }
 
 static void print_usage(const char* exe) {
-  std::cerr << "Usage: " << exe << " (--host|--connect) --relay <url> --room <name> [--password <pw>] [--insecure]\n";
+  std::cerr << "Usage: " << exe << " (--host|--connect) --relay <url> --room <name> [--room-secret <s>] [--password <pw>] [--insecure]\n";
+  std::cerr << "  --room-secret <s>   Shared out-of-band secret mixed into the room token sent to\n";
+  std::cerr << "                      the relay. Without it, the token only hides the room name from\n";
+  std::cerr << "                      casual log reading/enumeration -- it is OBFUSCATED, NOT SECRET,\n";
+  std::cerr << "                      since a guessable room name can still be dictionary-attacked.\n";
   std::cerr << "  --insecure   DEV ONLY: disable TLS certificate verification for wss:// (self-signed relays)\n";
   std::cerr << "Examples:\n  " << exe << " --host --relay http://127.0.0.1:8080 --room alice --password mypass\n  "
-            << exe << " --connect --relay http://127.0.0.1:8080 --room alice --password mypass\n";
+            << exe << " --connect --relay http://127.0.0.1:8080 --room alice --password mypass\n  "
+            << exe << " --host --relay http://127.0.0.1:8080 --room alice --room-secret ourpass --password mypass\n";
 }
 
 static std::string url_host(const std::string& url) {
@@ -49,6 +57,7 @@ int main(int argc, char* argv[]) {
   std::string mode;
   std::string relay;
   std::string room;
+  std::string room_secret;
   std::string pw;
   std::string id_path = "client.id";
   bool insecure_tls = false;
@@ -59,6 +68,7 @@ int main(int argc, char* argv[]) {
     else if (a == "--connect") { mode = "connect"; used_flags = true; }
     else if ((a == "--relay" || a == "-r") && i+1 < argc) { relay = argv[++i]; used_flags = true; }
     else if ((a == "--room" || a == "-m") && i+1 < argc) { room = argv[++i]; used_flags = true; }
+    else if (a == "--room-secret" && i+1 < argc) { room_secret = argv[++i]; used_flags = true; }
     else if ((a == "--password" || a == "-p") && i+1 < argc) { pw = argv[++i]; used_flags = true; }
     else if ((a == "--id-file" || a == "-i") && i+1 < argc) { id_path = argv[++i]; used_flags = true; }
     else if (a == "--insecure") { insecure_tls = true; used_flags = true; }
@@ -74,7 +84,18 @@ int main(int argc, char* argv[]) {
     std::cerr << "Enter password for identity (client.id): ";
     std::getline(std::cin, pw);
   }
-  std::string url = ws_join(relay, room);
+
+  // The relay only ever sees this derived token, never the real room name.
+  // Print a short prefix at startup so two peers can confirm out-of-band
+  // that they derived the SAME token (i.e. their room+room-secret match)
+  // before assuming a silent connect failure is something else.
+  const std::string token = room_token(room, room_secret);
+  std::cout << "Room token: " << token.substr(0, 16) << "..."
+            << (room_secret.empty()
+                    ? " (no --room-secret: obfuscated only, not secret)"
+                    : " (derived with --room-secret)")
+            << "\n";
+  std::string url = ws_join(relay, token);
 
   ConnectionEngine engine;
   std::string fp; std::string err; bool created=false;

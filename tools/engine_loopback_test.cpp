@@ -22,6 +22,7 @@
 #include "kem_kyber.h"
 #include "messages.pb.h"
 #include "protocol.h"
+#include "room_token.h"
 
 // Flip one byte inside Envelope.ciphertext (the sealed-sender AEAD output).
 // Since ALL per-message metadata now lives inside the ciphertext, this is the
@@ -534,6 +535,71 @@ int main() {
       return 1;
     }
     std::cout << "wrong-identity server signature correctly rejected: " << cerr3 << "\n";
+  }
+
+  // ---- 9) room_token: opaque relay room token derivation ----
+  // The relay room name IS the peer's username in GUI usage, so this must
+  // never appear in cleartext on the wire (the WebSocket "room=" query
+  // value). room_token() is what stands between the real name and the URL.
+  {
+    // Deterministic: same (room, secret) -> same token, across repeated calls.
+    const std::string t1 = room_token("alice", "shared-secret");
+    const std::string t2 = room_token("alice", "shared-secret");
+    if (t1 != t2) {
+      std::cerr << "SECURITY FAIL: room_token is not deterministic for identical inputs\n";
+      return 1;
+    }
+    std::cout << "room_token: deterministic for identical (room, secret)\n";
+
+    // Distinct room -> distinct token (secret held fixed).
+    const std::string t_room_b = room_token("bob", "shared-secret");
+    if (t1 == t_room_b) {
+      std::cerr << "SECURITY FAIL: different rooms produced the same token\n";
+      return 1;
+    }
+    std::cout << "room_token: different room name changes the token\n";
+
+    // Distinct secret -> distinct token (room held fixed).
+    const std::string t_secret_b = room_token("alice", "other-secret");
+    if (t1 == t_secret_b) {
+      std::cerr << "SECURITY FAIL: different secrets produced the same token\n";
+      return 1;
+    }
+    std::cout << "room_token: different secret changes the token\n";
+
+    // No collision from ambiguous concatenation: length-prefixing must keep
+    // ("ab","c") and ("a","bc") from hashing to the same thing.
+    const std::string t_ab_c = room_token("ab", "c");
+    const std::string t_a_bc = room_token("a", "bc");
+    if (t_ab_c == t_a_bc) {
+      std::cerr << "SECURITY FAIL: room_token(\"ab\",\"c\") == room_token(\"a\",\"bc\") "
+                << "(ambiguous concatenation collision)\n";
+      return 1;
+    }
+    std::cout << "room_token: (\"ab\",\"c\") and (\"a\",\"bc\") do not collide\n";
+
+    // Format: exactly 64 lowercase hex characters (a SHA-256 digest).
+    auto is_lower_hex64 = [](const std::string& s) {
+      if (s.size() != 64) return false;
+      return std::all_of(s.begin(), s.end(), [](unsigned char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+      });
+    };
+    if (!is_lower_hex64(t1) || !is_lower_hex64(t_room_b) || !is_lower_hex64(t_ab_c)) {
+      std::cerr << "SECURITY FAIL: room_token output is not exactly 64 lowercase hex chars\n";
+      return 1;
+    }
+    std::cout << "room_token: output is exactly 64 lowercase hex characters\n";
+
+    // The whole point: the token must not leak the room name as a substring.
+    const std::string sensitive_room = "alice-super-secret-username";
+    const std::string sensitive_token = room_token(sensitive_room, "");
+    if (sensitive_token.find(sensitive_room) != std::string::npos) {
+      std::cerr << "SECURITY FAIL: room_token output contains the room name as a substring\n";
+      return 1;
+    }
+    std::cout << "room_token: token for '" << sensitive_room << "' does not contain the room "
+              << "name as a substring\n";
   }
 
   std::cout << "ALL CHECKS PASSED\n";
