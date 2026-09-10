@@ -81,56 +81,136 @@ bool ct_equal(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) {
   return CRYPTO_memcmp(a.data(), b.data(), a.size()) == 0;
 }
 
-// Full mutual-context transcript hash bound into the server signature and the
-// key-confirmation MACs. Binds BOTH identity keys, BOTH KEM values, and the
-// version, so a relay/forward or identity-misbinding attack changes H and is
-// rejected.
-//   H = SHA256( version_be32
-//               || lp(client_id_pub) || lp(kem_pk)
-//               || lp(server_id_pub) || lp(kem_ct) )
-std::vector<uint8_t> transcriptHash(uint32_t version,
-                                    const std::vector<uint8_t>& client_pub,
-                                    const std::vector<uint8_t>& kem_pk,
-                                    const std::vector<uint8_t>& server_pub,
-                                    const std::vector<uint8_t>& kem_ct) {
-  std::vector<uint8_t> t;
+// v2 transcript hashes. Because the client's identity is not revealed to the
+// server until msg3, the transcript is split into two domain-separated
+// hashes rather than the single v1 H:
+//
+//   H_s = SHA256( "E2EE-HS-v2|s" || version_be32
+//                 || lp(kem_pk) || lp(kem_ct) || lp(server_id_pub) )
+//   H_c = SHA256( "E2EE-HS-v2|c" || version_be32
+//                 || lp(kem_pk) || lp(kem_ct) || lp(server_id_pub) || lp(client_id_pub) )
+//
+// H_s is computable by both sides the moment the server's contribution (KEM
+// ciphertext + server identity key) is known -- i.e. before the client's
+// identity has been revealed -- and is what the server signs and binds into
+// confirm_s. H_c extends H_s with the client's own identity key, so the
+// client's signature over H_c commits to exactly which server identity it
+// talked to: a relay cannot splice the client's msg3 onto a handshake
+// carrying a different server identity without changing H_c and breaking the
+// client signature (this is what prevents identity misbinding).
+std::vector<uint8_t> transcriptHashServer(uint32_t version,
+                                          const std::vector<uint8_t>& kem_pk,
+                                          const std::vector<uint8_t>& kem_ct,
+                                          const std::vector<uint8_t>& server_pub) {
+  static const char kPrefix[] = "E2EE-HS-v2|s";
+  std::vector<uint8_t> t(kPrefix, kPrefix + sizeof(kPrefix) - 1);
   put_u32_be(t, version);
-  put_lp(t, client_pub);
   put_lp(t, kem_pk);
-  put_lp(t, server_pub);
   put_lp(t, kem_ct);
+  put_lp(t, server_pub);
   return sha256(t);
 }
 
-// Message the CLIENT signs. It cannot yet see the server's fields, so it signs
-// version + its own identity key + its KEM public key. This still binds the
-// client's contribution and the version into the transcript the server hashes.
-std::vector<uint8_t> clientSigMsg(uint32_t version,
-                                  const std::vector<uint8_t>& client_pub,
-                                  const std::vector<uint8_t>& kem_pk) {
-  static const char kPrefix[] = "E2EE-HS-v1|client|";
+std::vector<uint8_t> transcriptHashClient(uint32_t version,
+                                          const std::vector<uint8_t>& kem_pk,
+                                          const std::vector<uint8_t>& kem_ct,
+                                          const std::vector<uint8_t>& server_pub,
+                                          const std::vector<uint8_t>& client_pub) {
+  static const char kPrefix[] = "E2EE-HS-v2|c";
+  std::vector<uint8_t> t(kPrefix, kPrefix + sizeof(kPrefix) - 1);
+  put_u32_be(t, version);
+  put_lp(t, kem_pk);
+  put_lp(t, kem_ct);
+  put_lp(t, server_pub);
+  put_lp(t, client_pub);
+  return sha256(t);
+}
+
+// Message the SERVER signs: prefix || H_s.
+std::vector<uint8_t> serverSigMsg(const std::vector<uint8_t>& H_s) {
+  static const char kPrefix[] = "E2EE-HS-v2|server|";
   std::vector<uint8_t> m(kPrefix, kPrefix + sizeof(kPrefix) - 1);
-  put_u32_be(m, version);
-  put_lp(m, client_pub);
-  put_lp(m, kem_pk);
+  m.insert(m.end(), H_s.begin(), H_s.end());
   return m;
 }
 
-// Message the SERVER signs: prefix || H (the full transcript hash).
-std::vector<uint8_t> serverSigMsg(const std::vector<uint8_t>& H) {
-  static const char kPrefix[] = "E2EE-HS-v1|server|";
+// Message the CLIENT signs: prefix || H_c.
+std::vector<uint8_t> clientSigMsg(const std::vector<uint8_t>& H_c) {
+  static const char kPrefix[] = "E2EE-HS-v2|client|";
   std::vector<uint8_t> m(kPrefix, kPrefix + sizeof(kPrefix) - 1);
-  m.insert(m.end(), H.begin(), H.end());
+  m.insert(m.end(), H_c.begin(), H_c.end());
   return m;
 }
 
-// Key-confirmation MAC input: a one-byte direction tag ('s' or 'c') || H.
+// Key-confirmation MAC input: a one-byte direction tag ('s' or 'c') || H
+// (H_s for the server's confirmation, H_c for the client's).
 std::vector<uint8_t> confirmMsg(char tag, const std::vector<uint8_t>& H) {
   std::vector<uint8_t> m;
   m.reserve(1 + H.size());
   m.push_back(static_cast<uint8_t>(tag));
   m.insert(m.end(), H.begin(), H.end());
   return m;
+}
+
+// AAD for the identity-concealing seal (SealedIdentity): a one-byte direction
+// tag plus the protocol version. Deliberately a SEPARATE helper from
+// buildMessageAad below (even though the byte encoding is the same) because
+// the two AAD domains must never be reused across each other -- this one
+// authenticates the handshake identity seal, that one authenticates
+// post-handshake message traffic.
+std::vector<uint8_t> buildOuterAad(uint8_t dirTag, uint32_t version) {
+  std::vector<uint8_t> aad;
+  aad.reserve(1 + 4);
+  aad.push_back(dirTag);
+  put_u32_be(aad, version);
+  return aad;
+}
+
+// Seal a SealedIdentity{identity_pub, identity_sig, confirm} blob under
+// k_outer for one direction of the handshake. Throws std::runtime_error on
+// serialization failure; AEAD/RNG failures propagate from AESGCMCrypto.
+void sealIdentity(const std::vector<uint8_t>& k_outer, uint8_t dirTag, uint32_t version,
+                  const std::vector<uint8_t>& id_pub, const std::vector<uint8_t>& id_sig,
+                  const std::vector<uint8_t>& confirm,
+                  std::vector<uint8_t>& nonceOut, std::vector<uint8_t>& sealedOut) {
+  SealedIdentity si;
+  si.set_identity_pub(reinterpret_cast<const char*>(id_pub.data()), id_pub.size());
+  si.set_identity_sig(reinterpret_cast<const char*>(id_sig.data()), id_sig.size());
+  si.set_confirm(reinterpret_cast<const char*>(confirm.data()), confirm.size());
+
+  std::string si_bytes;
+  if (!si.SerializeToString(&si_bytes)) {
+    throw std::runtime_error("Failed to serialize SealedIdentity");
+  }
+  const std::vector<uint8_t> plain(si_bytes.begin(), si_bytes.end());
+
+  nonceOut = AESGCMCrypto::random_nonce();
+  AESGCMCrypto outer(k_outer);
+  sealedOut = outer.encrypt(plain, nonceOut, buildOuterAad(dirTag, version));
+}
+
+// Open + parse a SealedIdentity blob sealed under k_outer for one direction.
+// Returns false (never throws) on an AEAD open failure or a malformed
+// plaintext, so callers can surface a clean handshake error.
+bool openIdentity(const std::vector<uint8_t>& k_outer, uint8_t dirTag, uint32_t version,
+                  const std::vector<uint8_t>& nonce, const std::vector<uint8_t>& sealed,
+                  std::vector<uint8_t>& idPubOut, std::vector<uint8_t>& idSigOut,
+                  std::vector<uint8_t>& confirmOut) {
+  std::vector<uint8_t> plain;
+  try {
+    AESGCMCrypto outer(k_outer);
+    plain = outer.decrypt(sealed, nonce, buildOuterAad(dirTag, version));
+  } catch (const std::exception&) {
+    return false;
+  }
+  SealedIdentity si;
+  if (!si.ParseFromArray(plain.data(), static_cast<int>(plain.size()))) {
+    return false;
+  }
+  idPubOut.assign(si.identity_pub().begin(), si.identity_pub().end());
+  idSigOut.assign(si.identity_sig().begin(), si.identity_sig().end());
+  confirmOut.assign(si.confirm().begin(), si.confirm().end());
+  return true;
 }
 
 // Canonical AAD bound into the AEAD tag: a per-direction constant plus the
@@ -864,15 +944,12 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
     std::vector<uint8_t> pk, sk;
     kem.keypair(pk, sk);
 
-    // Msg 1 (client -> server): sign version + our identity key + our KEM pk.
-    auto sig = IdentityStore::sign(identity_.priv,
-                                   clientSigMsg(protocol::kVersion, identity_.pub, pk));
-
+    // Msg 1 (client -> server): fully anonymous -- version + our ephemeral KEM
+    // public key only. No identity material of any kind travels in msg1, so a
+    // relay/observer learns nothing about who is connecting.
     HandshakeHello hello;
     hello.set_version(protocol::kVersion);
     hello.set_kem_public_key(std::string(reinterpret_cast<const char*>(pk.data()), pk.size()));
-    hello.set_identity_pub(std::string(reinterpret_cast<const char*>(identity_.pub.data()), identity_.pub.size()));
-    hello.set_identity_sig(std::string(reinterpret_cast<const char*>(sig.data()), sig.size()));
 
     std::string hello_bytes;
     if (!hello.SerializeToString(&hello_bytes)) {
@@ -897,93 +974,123 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       return false;
     }
 
-    // Explicit version check (also bound into H, so tampering breaks the sig).
+    // Explicit version check (also bound into the outer AAD and H_s, so
+    // tampering breaks either the identity seal or the server signature).
     if (resp.version() != protocol::kVersion) {
       errorOut = "Unsupported/mismatched protocol version in HandshakeResponse";
       return false;
     }
 
-    std::vector<uint8_t> server_pub(resp.identity_pub().begin(), resp.identity_pub().end());
-    std::vector<uint8_t> server_sig(resp.identity_sig().begin(), resp.identity_sig().end());
     std::vector<uint8_t> ct(resp.kem_ciphertext().begin(), resp.kem_ciphertext().end());
-    std::vector<uint8_t> confirm_s(resp.confirm().begin(), resp.confirm().end());
-
-    // Recompute the full transcript hash from the fields we now hold. Because H
-    // binds our OWN hello contribution, a relay/forward that swaps in a
-    // different client hello yields a different H and fails signature/confirm.
-    const auto H = transcriptHash(protocol::kVersion, identity_.pub, pk, server_pub, ct);
-
-    // Verify the server signature over "E2EE-HS-v1|server|" || H.
-    if (!IdentityStore::verify(server_pub, serverSigMsg(H), server_sig)) {
-      errorOut = "Server signature verification failed";
-      return false;
-    }
+    std::vector<uint8_t> sealed_nonce(resp.sealed_nonce().begin(), resp.sealed_nonce().end());
+    std::vector<uint8_t> sealed_identity(resp.sealed_identity().begin(), resp.sealed_identity().end());
 
     std::vector<uint8_t> ss;
     kem.decapsulate(ct, sk, ss);
 
-    // Expand the single KEM shared secret into two directional keys plus an
-    // independent key-confirmation key. The client encrypts with k_c2s (send)
-    // and decrypts with k_s2c (recv).
-    auto k_c2s = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_c2s(), 32);
-    auto k_s2c = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_s2c(), 32);
+    // Derive the identity-concealing key the instant the shared secret
+    // exists -- BEFORE either side's long-term identity has been exchanged --
+    // so the server's identity material can be opened.
+    auto k_outer = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_outer(), 32);
+
+    std::vector<uint8_t> server_pub, server_sig, confirm_s;
+    if (!openIdentity(k_outer, kDirS2C, protocol::kVersion, sealed_nonce, sealed_identity,
+                      server_pub, server_sig, confirm_s)) {
+      OPENSSL_cleanse(ss.data(), ss.size());
+      OPENSSL_cleanse(sk.data(), sk.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
+      errorOut = "failed to open server identity";
+      return false;
+    }
+
+    // Recompute H_s from the fields we now hold and verify the server
+    // signature over "E2EE-HS-v2|server|" || H_s.
+    const auto H_s = transcriptHashServer(protocol::kVersion, pk, ct, server_pub);
+    if (!IdentityStore::verify(server_pub, serverSigMsg(H_s), server_sig)) {
+      OPENSSL_cleanse(ss.data(), ss.size());
+      OPENSSL_cleanse(sk.data(), sk.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
+      errorOut = "Server signature verification failed";
+      return false;
+    }
+
+    // Independent key-confirmation key, derived from the same shared secret.
     auto k_confirm = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_confirm(), 32);
-    // Independent whole-file HMAC key: same shared secret, different info
-    // string, so a file tag can never be confused with a data-key operation.
-    auto k_file = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_file(), 32);
 
     // Verify the server's key confirmation: proves the server derived the same
     // shared secret (catches a KEM/key mismatch or a swapped ciphertext).
-    const auto expect_s = hmac_sha256(k_confirm, confirmMsg('s', H));
+    const auto expect_s = hmac_sha256(k_confirm, confirmMsg('s', H_s));
     if (!ct_equal(confirm_s, expect_s)) {
       OPENSSL_cleanse(ss.data(), ss.size());
       OPENSSL_cleanse(sk.data(), sk.size());
-      OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
-      OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
-      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Server key confirmation failed";
       return false;
     }
 
-    // Msg 3 (client -> server): send our confirmation, HMAC(k_confirm,"c"||H).
-    const auto confirm_c = hmac_sha256(k_confirm, confirmMsg('c', H));
+    // H_c extends H_s with our own identity key, so our signature over it
+    // commits to exactly which server identity we talked to (prevents
+    // identity misbinding by a relay/forward).
+    const auto H_c = transcriptHashClient(protocol::kVersion, pk, ct, server_pub, identity_.pub);
+    auto client_sig = IdentityStore::sign(identity_.priv, clientSigMsg(H_c));
+    const auto confirm_c = hmac_sha256(k_confirm, confirmMsg('c', H_c));
+
+    // Msg 3 (client -> server): seal our identity + confirmation under k_outer.
+    std::vector<uint8_t> conf_nonce, conf_sealed;
+    try {
+      sealIdentity(k_outer, kDirC2S, protocol::kVersion, identity_.pub, client_sig, confirm_c,
+                  conf_nonce, conf_sealed);
+    } catch (const std::exception& ex) {
+      OPENSSL_cleanse(ss.data(), ss.size());
+      OPENSSL_cleanse(sk.data(), sk.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
+      OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      errorOut = ex.what();
+      return false;
+    }
+
     HandshakeConfirm conf;
-    conf.set_confirm(std::string(reinterpret_cast<const char*>(confirm_c.data()), confirm_c.size()));
+    conf.set_sealed_nonce(std::string(reinterpret_cast<const char*>(conf_nonce.data()), conf_nonce.size()));
+    conf.set_sealed_identity(std::string(reinterpret_cast<const char*>(conf_sealed.data()), conf_sealed.size()));
     std::string conf_bytes;
     if (!conf.SerializeToString(&conf_bytes)) {
       OPENSSL_cleanse(ss.data(), ss.size());
       OPENSSL_cleanse(sk.data(), sk.size());
-      OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
-      OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
-      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to serialize HandshakeConfirm";
       return false;
     }
+    if (!send(std::vector<uint8_t>(conf_bytes.begin(), conf_bytes.end()))) {
+      OPENSSL_cleanse(ss.data(), ss.size());
+      OPENSSL_cleanse(sk.data(), sk.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
+      OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      errorOut = "Failed to send HandshakeConfirm";
+      return false;
+    }
+
+    // Only after msg3 is safely sent do we derive and install the directional
+    // session keys and the file key.
+    auto k_c2s = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_c2s(), 32);
+    auto k_s2c = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_s2c(), 32);
+    // Independent whole-file HMAC key: same shared secret, different info
+    // string, so a file tag can never be confused with a data-key operation.
+    auto k_file = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_file(), 32);
 
     session_.set_keys(k_c2s, k_s2c);
     session_.set_file_key(k_file);
     role_ = Role::Client;
-
-    if (!send(std::vector<uint8_t>(conf_bytes.begin(), conf_bytes.end()))) {
-      OPENSSL_cleanse(ss.data(), ss.size());
-      OPENSSL_cleanse(sk.data(), sk.size());
-      OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
-      OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
-      OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
-      OPENSSL_cleanse(k_file.data(), k_file.size());
-      errorOut = "Failed to send HandshakeConfirm";
-      return false;
-    }
     sessionReady_ = true;
 
     // Zeroize sensitive intermediate key material; the Session keeps its own copy.
     OPENSSL_cleanse(ss.data(), ss.size());
     OPENSSL_cleanse(sk.data(), sk.size());
+    OPENSSL_cleanse(k_outer.data(), k_outer.size());
+    OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
     OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
     OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
-    OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
     OPENSSL_cleanse(k_file.data(), k_file.size());
 
     peerFingerprintOut = IdentityStore::fingerprint_hex(server_pub);
@@ -1003,7 +1110,8 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
     return false;
   }
   try {
-    // Msg 1 (client -> server): HandshakeHello.
+    // Msg 1 (client -> server): HandshakeHello -- fully anonymous, no identity
+    // material of any kind.
     std::vector<uint8_t> frame;
     if (!recv(frame)) {
       errorOut = "Failed to receive HandshakeHello";
@@ -1015,103 +1123,135 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       return false;
     }
 
-    // Explicit version check (also bound into H, so tampering breaks the sig).
+    // Explicit version check (also bound into H_s/H_c and the outer AAD, so
+    // tampering breaks either the identity seal or a signature).
     if (hello.version() != protocol::kVersion) {
       errorOut = "Unsupported/mismatched protocol version in HandshakeHello";
       return false;
     }
 
     std::vector<uint8_t> client_pk(hello.kem_public_key().begin(), hello.kem_public_key().end());
-    std::vector<uint8_t> client_pub(hello.identity_pub().begin(), hello.identity_pub().end());
-    std::vector<uint8_t> client_sig(hello.identity_sig().begin(), hello.identity_sig().end());
-
-    if (!IdentityStore::verify(client_pub,
-                               clientSigMsg(protocol::kVersion, client_pub, client_pk),
-                               client_sig)) {
-      errorOut = "Client signature verification failed";
-      return false;
-    }
 
     KyberKEM kem;
     kem.init();
+    // Reject an empty or wrong-size (including grossly oversized) KEM public
+    // key up front, before doing any further work with attacker-controlled
+    // bytes.
+    if (client_pk.empty() || client_pk.size() != kem.pk_len()) {
+      errorOut = "invalid or missing client KEM public key in HandshakeHello";
+      return false;
+    }
+
     std::vector<uint8_t> ct, ss;
     kem.encapsulate(client_pk, ct, ss);
 
-    // Full transcript hash binds both identities, both KEM values and version.
-    const auto H = transcriptHash(protocol::kVersion, client_pub, client_pk, identity_.pub, ct);
-    auto sig = IdentityStore::sign(identity_.priv, serverSigMsg(H));
-
-    // Directional data keys + independent key-confirmation key.
-    auto k_c2s = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_c2s(), 32);
-    auto k_s2c = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_s2c(), 32);
+    // Derive the identity-concealing key and the key-confirmation key the
+    // instant the shared secret exists.
+    auto k_outer = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_outer(), 32);
     auto k_confirm = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_confirm(), 32);
-    // Independent whole-file HMAC key: same shared secret, different info
-    // string, so a file tag can never be confused with a data-key operation.
-    auto k_file = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_file(), 32);
 
-    const auto confirm_s = hmac_sha256(k_confirm, confirmMsg('s', H));
+    // H_s binds version + both KEM values + our OWN identity key. The
+    // client's identity is not yet known to us at this point.
+    const auto H_s = transcriptHashServer(protocol::kVersion, client_pk, ct, identity_.pub);
+    auto server_sig = IdentityStore::sign(identity_.priv, serverSigMsg(H_s));
+    const auto confirm_s = hmac_sha256(k_confirm, confirmMsg('s', H_s));
 
-    // Msg 2 (server -> client): HandshakeResponse with signature + confirm_s.
+    // Msg 2 (server -> client): seal our identity + signature + confirmation
+    // under k_outer instead of sending them in the clear.
+    std::vector<uint8_t> sealed_nonce, sealed_identity;
+    try {
+      sealIdentity(k_outer, kDirS2C, protocol::kVersion, identity_.pub, server_sig, confirm_s,
+                  sealed_nonce, sealed_identity);
+    } catch (const std::exception& ex) {
+      OPENSSL_cleanse(ss.data(), ss.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
+      OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      errorOut = ex.what();
+      return false;
+    }
+
     HandshakeResponse resp;
     resp.set_version(protocol::kVersion);
     resp.set_kem_ciphertext(std::string(reinterpret_cast<const char*>(ct.data()), ct.size()));
-    resp.set_identity_pub(std::string(reinterpret_cast<const char*>(identity_.pub.data()), identity_.pub.size()));
-    resp.set_identity_sig(std::string(reinterpret_cast<const char*>(sig.data()), sig.size()));
-    resp.set_confirm(std::string(reinterpret_cast<const char*>(confirm_s.data()), confirm_s.size()));
+    resp.set_sealed_nonce(std::string(reinterpret_cast<const char*>(sealed_nonce.data()), sealed_nonce.size()));
+    resp.set_sealed_identity(std::string(reinterpret_cast<const char*>(sealed_identity.data()), sealed_identity.size()));
 
     std::string resp_bytes;
     if (!resp.SerializeToString(&resp_bytes)) {
       OPENSSL_cleanse(ss.data(), ss.size());
-      OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
-      OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
-      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to serialize HandshakeResponse";
       return false;
     }
     if (!send(std::vector<uint8_t>(resp_bytes.begin(), resp_bytes.end()))) {
       OPENSSL_cleanse(ss.data(), ss.size());
-      OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
-      OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
-      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to send HandshakeResponse";
       return false;
     }
 
     // Msg 3 (client -> server): HandshakeConfirm. Only after verifying the
-    // client's confirmation is the server session ready.
+    // client's identity, signature, and confirmation is the server session
+    // ready.
     std::vector<uint8_t> conf_frame;
     if (!recv(conf_frame)) {
       OPENSSL_cleanse(ss.data(), ss.size());
-      OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
-      OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
-      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to receive HandshakeConfirm";
       return false;
     }
     HandshakeConfirm conf;
     if (!conf.ParseFromArray(conf_frame.data(), static_cast<int>(conf_frame.size()))) {
       OPENSSL_cleanse(ss.data(), ss.size());
-      OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
-      OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
-      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Failed to parse HandshakeConfirm";
       return false;
     }
-    std::vector<uint8_t> confirm_c(conf.confirm().begin(), conf.confirm().end());
-    const auto expect_c = hmac_sha256(k_confirm, confirmMsg('c', H));
+
+    std::vector<uint8_t> conf_nonce(conf.sealed_nonce().begin(), conf.sealed_nonce().end());
+    std::vector<uint8_t> conf_sealed(conf.sealed_identity().begin(), conf.sealed_identity().end());
+
+    std::vector<uint8_t> client_pub, client_sig, confirm_c;
+    if (!openIdentity(k_outer, kDirC2S, protocol::kVersion, conf_nonce, conf_sealed,
+                      client_pub, client_sig, confirm_c)) {
+      OPENSSL_cleanse(ss.data(), ss.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
+      OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      errorOut = "failed to open client identity";
+      return false;
+    }
+
+    // H_c extends H_s with the client's identity key: verify the client
+    // committed to exactly OUR identity (prevents identity misbinding) and
+    // that it derived the same shared secret.
+    const auto H_c = transcriptHashClient(protocol::kVersion, client_pk, ct, identity_.pub, client_pub);
+    if (!IdentityStore::verify(client_pub, clientSigMsg(H_c), client_sig)) {
+      OPENSSL_cleanse(ss.data(), ss.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
+      OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
+      errorOut = "Client signature verification failed";
+      return false;
+    }
+    const auto expect_c = hmac_sha256(k_confirm, confirmMsg('c', H_c));
     if (!ct_equal(confirm_c, expect_c)) {
       OPENSSL_cleanse(ss.data(), ss.size());
-      OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
-      OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
+      OPENSSL_cleanse(k_outer.data(), k_outer.size());
       OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
-      OPENSSL_cleanse(k_file.data(), k_file.size());
       errorOut = "Client key confirmation failed";
       return false;
     }
+
+    // Only now, after mutual authentication is fully complete, derive and
+    // install the directional session keys and the file key.
+    auto k_c2s = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_c2s(), 32);
+    auto k_s2c = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_s2c(), 32);
+    // Independent whole-file HMAC key: same shared secret, different info
+    // string, so a file tag can never be confused with a data-key operation.
+    auto k_file = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_file(), 32);
 
     // The server encrypts with k_s2c (send) and decrypts with k_c2s (recv) —
     // mirror of the client.
@@ -1122,9 +1262,10 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
 
     // Zeroize sensitive intermediate key material; the Session keeps its own copy.
     OPENSSL_cleanse(ss.data(), ss.size());
+    OPENSSL_cleanse(k_outer.data(), k_outer.size());
+    OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
     OPENSSL_cleanse(k_c2s.data(), k_c2s.size());
     OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
-    OPENSSL_cleanse(k_confirm.data(), k_confirm.size());
     OPENSSL_cleanse(k_file.data(), k_file.size());
 
     peerFingerprintOut = IdentityStore::fingerprint_hex(client_pub);

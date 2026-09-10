@@ -1,23 +1,50 @@
 syntax = "proto3";
 
-// Msg 1: Client -> Server
+// Msg 1: Client -> Server. Fully anonymous: carries no identity material at
+// all, only the ephemeral Kyber KEM public key. Field numbers/names 3 and 4
+// (identity_pub / identity_sig) are retired for good — they used to carry the
+// client's raw Ed25519 identity key and signature in cleartext, which let any
+// relay/observer learn who was talking to whom.
 message HandshakeHello {
-  bytes kem_public_key = 1;   // Kyber-512 pk
-  uint32 version       = 2;   // protocol::kVersion
-  bytes identity_pub   = 3;   // Ed25519 long-term public key (32 bytes)
-  bytes identity_sig   = 4;   // Ed25519 sig over "E2EE-HS-v1|client|" || version || lp(id_pub) || lp(kem_pk)
+  uint32 version        = 1;   // protocol::kVersion
+  bytes  kem_public_key = 2;   // Kyber-512 pk
+  reserved 3, 4;
+  reserved "identity_pub", "identity_sig";
 }
 
-// Msg 2: Server -> Client
+// Msg 2: Server -> Client. Carries the KEM ciphertext plus the server's
+// identity material sealed under k_outer (derived from the KEM shared secret
+// the moment it is available on both sides), so an observer sees only opaque
+// AEAD ciphertext instead of the server's Ed25519 public key and signature.
+// Field numbers/names 3, 4, 5 (identity_pub / identity_sig / confirm) are
+// retired: they used to carry the server's identity key, signature, and key
+// confirmation MAC in cleartext.
 message HandshakeResponse {
-  bytes kem_ciphertext = 1;   // Kyber-512 ct
-  uint32 version       = 2;   // protocol::kVersion
-  bytes identity_pub   = 3;   // Server Ed25519 public key
-  bytes identity_sig   = 4;   // Ed25519 sig over "E2EE-HS-v1|server|" || H (full transcript hash)
-  bytes confirm        = 5;   // HMAC(k_confirm, "s" || H) — server key confirmation
+  uint32 version        = 1;   // protocol::kVersion
+  bytes  kem_ciphertext = 2;   // Kyber-512 ct
+  reserved 3, 4, 5;
+  reserved "identity_pub", "identity_sig", "confirm";
+  bytes sealed_nonce    = 6;   // 12-byte AES-256-GCM nonce for sealed_identity
+  bytes sealed_identity = 7;   // AES-256-GCM(k_outer, SealedIdentity) ciphertext||tag
 }
 
-// Msg 3: Client -> Server
+// Msg 3: Client -> Server. Carries the client's identity material sealed
+// under the same k_outer, so the client's identity is never sent in the
+// clear either. Field number/name 1 (confirm) is retired: the old cleartext
+// key-confirmation MAC now lives inside SealedIdentity.confirm.
 message HandshakeConfirm {
-  bytes confirm = 1;          // HMAC(k_confirm, "c" || H) — client key confirmation
+  reserved 1;
+  reserved "confirm";
+  bytes sealed_nonce    = 2;   // 12-byte AES-256-GCM nonce for sealed_identity
+  bytes sealed_identity = 3;   // AES-256-GCM(k_outer, SealedIdentity) ciphertext||tag
+}
+
+// Plaintext of sealed_identity in both directions. Sealed under k_outer with
+// AAD = [direction byte][version_be32] (0x02 for server->client, 0x01 for
+// client->server) so a sealed blob from one direction/version can never be
+// replayed as the other.
+message SealedIdentity {
+  bytes identity_pub = 1;   // Ed25519 long-term public key (32 bytes)
+  bytes identity_sig = 2;   // Ed25519 signature over the v2 transcript hash
+  bytes confirm       = 3;  // HKDF key-confirmation MAC for this direction
 }

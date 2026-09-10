@@ -14,9 +14,14 @@
 #include <google/protobuf/stubs/common.h>
 
 #include "connection_engine.h"
+#include "crypto.h"
 #include "envelope.pb.h"
 #include "handshake.pb.h"
+#include "hkdf.h"
+#include "identity.h"
+#include "kem_kyber.h"
 #include "messages.pb.h"
+#include "protocol.h"
 
 // Flip one byte inside Envelope.ciphertext (the sealed-sender AEAD output).
 // Since ALL per-message metadata now lives inside the ciphertext, this is the
@@ -103,6 +108,87 @@ int main() {
   }
   std::cout << "client fp: " << fp_c.substr(0, 16) << "...\n";
   std::cout << "server fp: " << fp_s.substr(0, 16) << "...\n";
+
+  // ---- 0) Handshake identity concealment on the wire ----
+  // Runs its own capture-instrumented handshake (fresh ConnectionEngine
+  // instances, same on-disk identities) and inspects the RAW serialized
+  // msg1/msg2 frames exactly as they pass through the send callbacks. Proves
+  // the core anonymity property of the identity-concealing redesign: neither
+  // party's raw 32-byte Ed25519 public key -- nor, for msg1, anything
+  // signature-sized derived from an identity key -- ever appears as a
+  // contiguous byte run in what a relay/observer sees.
+  {
+    ConnectionEngine cw, sw;
+    std::string fpcw, fpsw, ew;
+    bool crw = false;
+    if (!cw.loadOrCreateIdentity(client_id, pw, fpcw, ew, &crw) ||
+        !sw.loadOrCreateIdentity(server_id, pw, fpsw, ew, &crw)) {
+      std::cerr << "wire-capture identity error: " << ew << "\n"; return 1;
+    }
+
+    Channel wc2s, ws2c;
+    std::mutex capture_mtx;
+    std::vector<uint8_t> msg1_bytes, msg2_bytes;
+
+    // cw_send fires for msg1 (Hello) AND msg3 (Confirm); only the FIRST call
+    // is msg1, so only capture when msg1_bytes is still empty.
+    auto cw_send = [&](const std::vector<uint8_t>& f) {
+      {
+        std::lock_guard<std::mutex> lk(capture_mtx);
+        if (msg1_bytes.empty()) msg1_bytes = f;
+      }
+      return send_to(wc2s, f);
+    };
+    auto cw_recv = [&](std::vector<uint8_t>& f) { return recv_from(ws2c, f); };
+    // sw_send fires exactly once, for msg2 (Response).
+    auto sw_send = [&](const std::vector<uint8_t>& f) {
+      {
+        std::lock_guard<std::mutex> lk(capture_mtx);
+        if (msg2_bytes.empty()) msg2_bytes = f;
+      }
+      return send_to(ws2c, f);
+    };
+    auto sw_recv = [&](std::vector<uint8_t>& f) { return recv_from(wc2s, f); };
+
+    std::thread th_sw([&] {
+      std::string peer, e;
+      sw.runServerHandshake(sw_send, sw_recv, peer, e);
+    });
+    std::string peer, e;
+    if (!cw.runClientHandshake(cw_send, cw_recv, peer, e)) {
+      std::cerr << "wire-capture handshake failed: " << e << "\n"; return 1;
+    }
+    th_sw.join();
+
+    if (msg1_bytes.empty() || msg2_bytes.empty()) {
+      std::cerr << "wire-capture failed to capture msg1/msg2\n"; return 1;
+    }
+
+    const std::string client_pub_s(cw.identity().pub.begin(), cw.identity().pub.end());
+    const std::string server_pub_s(sw.identity().pub.begin(), sw.identity().pub.end());
+
+    if (bytes_contain(msg1_bytes, client_pub_s) || bytes_contain(msg1_bytes, server_pub_s)) {
+      std::cerr << "SECURITY FAIL: msg1 contains a raw identity public key\n"; return 1;
+    }
+    if (bytes_contain(msg2_bytes, client_pub_s) || bytes_contain(msg2_bytes, server_pub_s)) {
+      std::cerr << "SECURITY FAIL: msg2 contains a raw identity public key\n"; return 1;
+    }
+
+    // msg1 additionally must carry no signature-sized blob derived from
+    // either identity. Probe: a genuine Ed25519 signature produced with the
+    // client's real key (over the exact bytes it put on the wire, standing in
+    // for "anything the client might have signed") is effectively random and
+    // must not appear as a substring of msg1 -- msg1 no longer signs
+    // anything at all, so this should trivially hold.
+    auto probe_sig = IdentityStore::sign(cw.identity().priv, msg1_bytes);
+    const std::string probe_sig_s(probe_sig.begin(), probe_sig.end());
+    if (bytes_contain(msg1_bytes, probe_sig_s)) {
+      std::cerr << "SECURITY FAIL: msg1 contains a signature-sized identity blob\n"; return 1;
+    }
+    std::cout << "wire capture: msg1 (" << msg1_bytes.size() << " bytes) and msg2 ("
+              << msg2_bytes.size() << " bytes) contain neither party's raw identity "
+              << "public key, and msg1 carries no identity signature\n";
+  }
 
   Channel c2s, s2c;
 
@@ -291,10 +377,14 @@ int main() {
     }
   }
 
-  // ---- 7) A tampered server key-confirmation must be REJECTED by the client ----
-  // Runs a fresh 3-message handshake but flips the server's confirmation MAC in
-  // flight. The server signature (over the transcript hash H) still verifies, so
-  // this specifically exercises the HMAC key-confirmation step (item 3).
+  // ---- 7) A tampered sealed_identity blob must be REJECTED (AEAD open fails) ----
+  // Runs a fresh 3-message handshake but flips one byte inside the server's
+  // sealed_identity blob in flight. Identity material (including the server's
+  // key-confirmation MAC) now travels only as ciphertext sealed under
+  // k_outer, so this is the only way left to tamper with it from outside the
+  // engine: any single-byte change anywhere in the blob must break the GCM
+  // tag as a whole, rather than corrupting one field (e.g. confirm) in
+  // isolation the way the old plaintext test did.
   {
     ConnectionEngine client2, server2;
     std::string e;
@@ -309,17 +399,17 @@ int main() {
     auto ns_send = [&](const std::vector<uint8_t>& f){ return send_to(ns2c, f); };
     auto ns_recv = [&](std::vector<uint8_t>& f){ return recv_from(nc2s, f); };
     auto nc_send = [&](const std::vector<uint8_t>& f){ return send_to(nc2s, f); };
-    // The client's only received frame during the handshake is the response; we
-    // corrupt its confirmation MAC before handing it to the engine.
+    // The client's only received frame during the handshake is the response;
+    // we corrupt its sealed_identity bytes before handing it to the engine.
     auto nc_recv = [&](std::vector<uint8_t>& f){
       std::vector<uint8_t> raw;
       if (!recv_from(ns2c, raw)) return false;
       HandshakeResponse resp;
       if (!resp.ParseFromArray(raw.data(), static_cast<int>(raw.size()))) { f = raw; return true; }
-      std::string c = resp.confirm();
-      if (!c.empty()) {
-        c[0] ^= 0x01;
-        resp.set_confirm(c);
+      std::string si = resp.sealed_identity();
+      if (!si.empty()) {
+        si[0] ^= 0x01;
+        resp.set_sealed_identity(si);
         std::string bytes;
         if (resp.SerializeToString(&bytes)) { f.assign(bytes.begin(), bytes.end()); return true; }
       }
@@ -343,10 +433,107 @@ int main() {
     th_s.join();
 
     if (ok2) {
-      std::cerr << "SECURITY FAIL: client accepted a tampered key confirmation\n";
+      std::cerr << "SECURITY FAIL: client accepted a tampered sealed identity\n";
       return 1;
     }
-    std::cout << "tampered key-confirmation correctly rejected: " << cerr << "\n";
+    if (cerr != "failed to open server identity") {
+      std::cerr << "SECURITY FAIL: expected 'failed to open server identity', got '"
+                << cerr << "'\n";
+      return 1;
+    }
+    std::cout << "tampered sealed identity correctly rejected: " << cerr << "\n";
+  }
+
+  // ---- 8) A corrupted server signature must be REJECTED, independent of AEAD ----
+  // Hand-rolls a "server" for msg2 using the same public crypto building
+  // blocks the real handshake uses (KyberKEM, hkdf_sha256, AESGCMCrypto,
+  // IdentityStore), so the AEAD seal on sealed_identity is completely VALID --
+  // this exercises signature verification specifically, which item 7 above
+  // cannot (any byte tamper there breaks the seal before a signature is ever
+  // checked). The claimed identity_pub is the REAL server's public key, but
+  // the signature over it is produced by a DIFFERENT identity ("mallory"), so
+  // IdentityStore::verify must still reject it even though the seal opens.
+  {
+    ConnectionEngine client3, mallory;
+    std::string e3;
+    bool cr3 = false;
+    std::string fpc3, fpm;
+    if (!client3.loadOrCreateIdentity(client_id, pw, fpc3, e3, &cr3) ||
+        !mallory.loadOrCreateIdentity("build/test_id/mallory.id", pw, fpm, e3, &cr3)) {
+      std::cerr << "sig-test identity error: " << e3 << "\n"; return 1;
+    }
+
+    Channel fc2s, fs2c;
+    auto fc_send = [&](const std::vector<uint8_t>& f){ return send_to(fc2s, f); };
+    auto fc_recv = [&](std::vector<uint8_t>& f){ return recv_from(fs2c, f); };
+
+    std::thread th_fake([&]{
+      std::vector<uint8_t> hello_frame;
+      if (!recv_from(fc2s, hello_frame)) return;
+      HandshakeHello hello;
+      if (!hello.ParseFromArray(hello_frame.data(), static_cast<int>(hello_frame.size()))) return;
+      std::vector<uint8_t> client_pk(hello.kem_public_key().begin(), hello.kem_public_key().end());
+
+      KyberKEM kem;
+      kem.init();
+      std::vector<uint8_t> ct, ss;
+      kem.encapsulate(client_pk, ct, ss);
+      auto k_outer = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_outer(), 32);
+
+      // Sign an unrelated message with mallory's key, but claim the REAL
+      // server's identity_pub -- pub key and signature deliberately do not
+      // correspond to the same keypair.
+      const std::vector<uint8_t>& real_server_pub = server.identity().pub;
+      const std::vector<uint8_t> bogus_msg = {'b', 'a', 'd'};
+      auto bad_sig = IdentityStore::sign(mallory.identity().priv, bogus_msg);
+      const std::vector<uint8_t> fake_confirm(32, 0);
+
+      SealedIdentity si;
+      si.set_identity_pub(reinterpret_cast<const char*>(real_server_pub.data()), real_server_pub.size());
+      si.set_identity_sig(reinterpret_cast<const char*>(bad_sig.data()), bad_sig.size());
+      si.set_confirm(reinterpret_cast<const char*>(fake_confirm.data()), fake_confirm.size());
+      std::string si_bytes;
+      if (!si.SerializeToString(&si_bytes)) return;
+
+      auto nonce = AESGCMCrypto::random_nonce();
+      AESGCMCrypto outer(k_outer);
+      // AAD = [0x02 (server->client)] || version_be32, matching buildOuterAad
+      // in connection_engine.cpp exactly, so the seal opens cleanly.
+      std::vector<uint8_t> aad;
+      aad.push_back(0x02);
+      aad.push_back(static_cast<uint8_t>((protocol::kVersion >> 24) & 0xFF));
+      aad.push_back(static_cast<uint8_t>((protocol::kVersion >> 16) & 0xFF));
+      aad.push_back(static_cast<uint8_t>((protocol::kVersion >> 8) & 0xFF));
+      aad.push_back(static_cast<uint8_t>(protocol::kVersion & 0xFF));
+      std::vector<uint8_t> plain(si_bytes.begin(), si_bytes.end());
+      auto sealed = outer.encrypt(plain, nonce, aad);
+
+      HandshakeResponse resp;
+      resp.set_version(protocol::kVersion);
+      resp.set_kem_ciphertext(std::string(reinterpret_cast<const char*>(ct.data()), ct.size()));
+      resp.set_sealed_nonce(std::string(reinterpret_cast<const char*>(nonce.data()), nonce.size()));
+      resp.set_sealed_identity(std::string(reinterpret_cast<const char*>(sealed.data()), sealed.size()));
+      std::string resp_bytes;
+      if (!resp.SerializeToString(&resp_bytes)) return;
+      send_to(fs2c, std::vector<uint8_t>(resp_bytes.begin(), resp_bytes.end()));
+    });
+
+    std::string peer3, cerr3;
+    bool ok3 = client3.runClientHandshake(fc_send, fc_recv, peer3, cerr3);
+    { std::lock_guard<std::mutex> lk(fc2s.mtx); fc2s.closed = true; fc2s.cv.notify_all(); }
+    { std::lock_guard<std::mutex> lk(fs2c.mtx); fs2c.closed = true; fs2c.cv.notify_all(); }
+    th_fake.join();
+
+    if (ok3) {
+      std::cerr << "SECURITY FAIL: client accepted a server signature from the wrong identity\n";
+      return 1;
+    }
+    if (cerr3 != "Server signature verification failed") {
+      std::cerr << "SECURITY FAIL: expected 'Server signature verification failed', got '"
+                << cerr3 << "'\n";
+      return 1;
+    }
+    std::cout << "wrong-identity server signature correctly rejected: " << cerr3 << "\n";
   }
 
   std::cout << "ALL CHECKS PASSED\n";

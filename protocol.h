@@ -49,5 +49,18 @@ inline const std::vector<uint8_t>& hkdf_info_file() {
       {'E','2','E','E','-','v','1','|','f','i','l','e','-','h','m','a','c'};
   return k;
 }
+
+// HKDF info label for the handshake identity-concealing key (k_outer). Derived
+// from the same KEM shared secret the moment it is available, before either
+// side's long-term identity key has been exchanged, so both parties' Ed25519
+// identity keys and signatures can be sealed under it rather than sent in the
+// clear. Independent of the directional data keys, the confirmation key, and
+// the file key.
+inline const std::vector<uint8_t>& hkdf_info_outer() {
+  // "E2EE-v1|outer"
+  static const std::vector<uint8_t> k =
+      {'E','2','E','E','-','v','1','|','o','u','t','e','r'};
+  return k;
+}
 } // namespace protocol
 
