@@ -123,12 +123,14 @@ if (BUILD_GUI)
     ${GUI_DIR}/main.cpp
     ${GUI_DIR}/MainWindow.cpp
     ${GUI_DIR}/EngineWorker.cpp
+    ${GUI_DIR}/HandshakePanel.cpp
     ws_transport.cpp          # WebSocket transport source
     ws_transport.h            # header (for IDE convenience)
   )
   set(GUI_HEADERS
     ${GUI_DIR}/MainWindow.h
     ${GUI_DIR}/EngineWorker.h
+    ${GUI_DIR}/HandshakePanel.h
   )
 
   add_executable(e2ee_chat_gui ${GUI_SOURCES} ${GUI_HEADERS})

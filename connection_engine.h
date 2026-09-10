@@ -12,6 +12,27 @@
 #include "identity.h"
 #include "session.h"
 
+// One observable milestone of the handshake, reported to an OPTIONAL observer
+// (see ConnectionEngine::setHandshakeObserver) purely for UI visualization.
+//
+// SECURITY: a HandshakeStep never carries key material, the KEM shared
+// secret, or any private key -- only algorithm/step names, PUBLIC byte
+// counts (KEM public key / ciphertext / signature sizes), and fingerprint
+// hex (already public; the same value IdentityStore::fingerprint_hex()
+// produces elsewhere). Every call site in connection_engine.cpp that reports
+// a step was reviewed against this rule.
+struct HandshakeStep {
+  enum class Id {
+    IdentityReady, KemKeypair, HelloSent, HelloReceived, Encapsulated,
+    Decapsulated, IdentitySealed, IdentityOpened, SignatureVerified,
+    KeysDerived, ConfirmVerified, Complete
+  };
+  Id id;
+  std::string detail;   // short human-readable, e.g. "Kyber-512 public key: 800 bytes"
+  uint64_t bytes = 0;   // 0 when not applicable
+};
+using HandshakeObserverFn = std::function<void(const HandshakeStep&)>;
+
 class ConnectionEngine {
 public:
   using SendFrameFn = std::function<bool(const std::vector<uint8_t>&)>;
@@ -43,6 +64,18 @@ public:
                             bool* created = nullptr);
 
   const Identity& identity() const { return identity_; }
+
+  // Optional observer invoked at real handshake milestones (see HandshakeStep
+  // above), purely so a GUI can render genuine progress instead of faking it.
+  // Default is none (null), which is a complete no-op: every call site checks
+  // the observer before doing any extra work, so a null observer costs
+  // nothing and changes zero handshake behavior. The observer is invoked
+  // synchronously on whichever thread runs the handshake; a caller crossing
+  // into a GUI thread must hop via a queued connection itself. Any exception
+  // thrown by the observer is caught and discarded inside the engine so a
+  // misbehaving GUI callback can never alter handshake control flow or skip
+  // a cleanse.
+  void setHandshakeObserver(HandshakeObserverFn fn);
 
   // Client role: send HandshakeHello, receive HandshakeResponse.
   bool runClientHandshake(const SendFrameFn& send,
@@ -143,6 +176,14 @@ private:
   // Abort an inbound transfer: close and delete the partial file, forget it.
   void abortInboundTransfer(uint64_t transferId);
 
+  // Report one handshake milestone to handshakeObserver_ if one is set.
+  // No-op when null. Never throws (catches/discards any exception the
+  // observer raises) so a GUI callback can never affect handshake control
+  // flow, timing, or the cleanse ordering around it. `detail` must already be
+  // fully built by the caller -- only public sizes/names/fingerprints, never
+  // key material.
+  void emitStep(HandshakeStep::Id id, std::string detail, uint64_t bytes = 0) const noexcept;
+
   // Which side of the handshake we are; determines the AAD direction tag and
   // which derived key is used for send vs. receive.
   enum class Role { None, Client, Server };
@@ -153,4 +194,9 @@ private:
   bool sessionReady_ = false;
   std::string downloadDir_ = "./received";
   std::map<uint64_t, InboundTransfer> inbound_;
+
+  // Optional handshake progress observer; see setHandshakeObserver above.
+  // Default-constructed std::function is null/empty -- zero behavior change
+  // until a caller opts in.
+  HandshakeObserverFn handshakeObserver_;
 };

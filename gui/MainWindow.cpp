@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "EngineWorker.h"
+#include "HandshakePanel.h"
 
 #include <QTextEdit>
 #include <QLineEdit>
@@ -13,6 +14,7 @@
 #include <QInputDialog>
 #include <QDateTime>
 #include <QThread>
+#include <QDockWidget>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
   chatView_(new QTextEdit(this)),
@@ -24,7 +26,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
   worker_(new EngineWorker())
 {
   setWindowTitle(tr("E2EE Messenger – Relay Ready"));
-  resize(860, 600);
+  resize(1180, 640);
 
   chatView_->setReadOnly(true);
   auto* central = new QWidget(this);
@@ -37,6 +39,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
   row->addWidget(sendBtn_);
   v->addLayout(row);
   setCentralWidget(central);
+
+  // ---- Key Exchange visualization dock: real handshake progress, driven by
+  // genuine ConnectionEngine observer events (see HandshakePanel/EngineWorker).
+  // Always visible (no close button) so it can't be lost by an accidental click.
+  handshakePanel_ = new HandshakePanel(this);
+  auto* handshakeDock = new QDockWidget(tr("Key Exchange"), this);
+  handshakeDock->setObjectName("KeyExchangeDock");
+  handshakeDock->setWidget(handshakePanel_);
+  handshakeDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+  handshakeDock->setMinimumWidth(300);
+  addDockWidget(Qt::RightDockWidgetArea, handshakeDock);
 
   // Menus
   auto* connMenu = menuBar()->addMenu(tr("&TCP (Dev)"));
@@ -80,6 +93,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
   connect(worker_, &EngineWorker::status,           this, &MainWindow::onWorkerStatus);
   connect(worker_, &EngineWorker::error,            this, &MainWindow::onWorkerError);
   connect(worker_, &EngineWorker::identityReady,    this, &MainWindow::onIdentityReady);
+
+  // Worker -> Key Exchange panel (queued across threads automatically; see
+  // EngineWorker.h). Genuine handshake events only -- no simulated steps.
+  connect(worker_, &EngineWorker::handshakeStarted,     handshakePanel_, &HandshakePanel::onHandshakeStarted);
+  connect(worker_, &EngineWorker::handshakeStepOccurred, handshakePanel_, &HandshakePanel::onHandshakeStep);
+  connect(worker_, &EngineWorker::ownFingerprintReady,  handshakePanel_, &HandshakePanel::onOwnFingerprint);
+  connect(worker_, &EngineWorker::peerFingerprintReady, handshakePanel_, &HandshakePanel::onPeerFingerprint);
+  connect(worker_, &EngineWorker::peerPinResult,        handshakePanel_, &HandshakePanel::onPeerPinResult);
+  connect(worker_, &EngineWorker::error,                handshakePanel_, &HandshakePanel::onWorkerError);
+  connect(worker_, &EngineWorker::disconnected,         handshakePanel_, &HandshakePanel::onDisconnected);
 
   // Menu actions
   connect(actConnect, &QAction::triggered, this, &MainWindow::onConnect);

@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <QMetaType>
 #include <atomic>
 #include <thread>
 #include <mutex>
@@ -10,6 +11,11 @@
 
 #include "tcp_transport.h"
 #include "connection_engine.h"
+
+// HandshakeStep (connection_engine.h) travels from the worker thread to the
+// GUI thread as a queued-signal argument, so it needs to be a registered Qt
+// metatype (see qRegisterMetaType<HandshakeStep>() in the .cpp constructor).
+Q_DECLARE_METATYPE(HandshakeStep)
 
 // No protobuf in header
 class EngineWorker : public QObject {
@@ -40,6 +46,40 @@ signals:
   void disconnected();
   void identityReady(const QString& fingerprintHex);
   void messageReceived(const QString& text);
+
+  // ---- Key-exchange visualization (Key Exchange dock panel) ----
+  // All of these are emitted from whichever handshake call runs on THIS
+  // worker's thread; Qt auto-queues them across to the GUI thread since
+  // EngineWorker lives on workerThread_ (same pattern as status()/error()
+  // above -- no explicit Qt::QueuedConnection needed at the connect() site,
+  // it is selected automatically because sender and receiver live in
+  // different threads).
+
+  // Fired right before the real cryptographic handshake begins (after any
+  // transport-level connect has already succeeded), so the panel knows
+  // whether to lay out the client-role or server-role step sequence.
+  void handshakeStarted(bool asClient);
+
+  // One genuine handshake milestone, forwarded verbatim from
+  // ConnectionEngine's observer (see connection_engine.h HandshakeStep).
+  // Never carries key material -- see the security note on HandshakeStep.
+  void handshakeStepOccurred(const HandshakeStep& step);
+
+  // Our own identity fingerprint (full hex), for the panel's "Peer
+  // Verification" section. identityReady() above still carries the
+  // shortened form used in the chat log / status bar; this is additive.
+  void ownFingerprintReady(const QString& fingerprintHexFull);
+
+  // The peer's fingerprint (full hex) as soon as the handshake reports it,
+  // before the TOFU pin check runs.
+  void peerFingerprintReady(const QString& peerLabel, const QString& fingerprintHexFull);
+
+  // Structured result of the TOFU pin check that checkPeerPin() already
+  // performs and acts on (abort-on-mismatch behavior is unchanged); this is
+  // purely an additional, more structured signal for the panel so it does
+  // not have to pattern-match the free-text status()/error() strings.
+  // result: 0 = Pinned (first use), 1 = Matched, 2 = Mismatch.
+  void peerPinResult(const QString& peerLabel, const QString& fingerprintHexFull, int result);
 
 private:
   bool parseEndpoint(const QString& endpoint, std::string& host, uint16_t& port);

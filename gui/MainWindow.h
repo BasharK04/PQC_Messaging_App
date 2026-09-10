@@ -7,6 +7,7 @@ class QPushButton;
 class QLabel;
 class QThread;
 class EngineWorker;
+class HandshakePanel;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -53,6 +54,7 @@ private:
   QPushButton* sendBtn_;
   QLabel* statusLabel_;
   QLabel* identityLabel_;
+  HandshakePanel* handshakePanel_;
 
   QThread* workerThread_;
   EngineWorker* worker_;

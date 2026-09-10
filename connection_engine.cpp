@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
@@ -331,6 +332,31 @@ void ConnectionEngine::abortInboundTransfer(uint64_t transferId) {
   std::error_code ec;
   std::filesystem::remove(it->second.tempPath, ec);  // best effort
   inbound_.erase(it);
+}
+
+void ConnectionEngine::setHandshakeObserver(HandshakeObserverFn fn) {
+  handshakeObserver_ = std::move(fn);
+}
+
+// See the declaration in connection_engine.h: null-safe, never throws, and
+// every call site passes only public sizes/names/fingerprints -- never key
+// material -- so there is nothing here for a misbehaving observer to turn
+// into a security or timing issue. The try/catch is the "cannot escape into
+// the handshake" boundary: whatever the GUI-provided std::function does, its
+// exceptions die here rather than unwinding through clientHandshakeInternal /
+// serverHandshakeInternal and potentially skipping a subsequent
+// OPENSSL_cleanse call.
+void ConnectionEngine::emitStep(HandshakeStep::Id id, std::string detail, uint64_t bytes) const noexcept {
+  if (!handshakeObserver_) return;
+  try {
+    HandshakeStep step;
+    step.id = id;
+    step.detail = std::move(detail);
+    step.bytes = bytes;
+    handshakeObserver_(step);
+  } catch (...) {
+    // A GUI observer must never be able to perturb the handshake.
+  }
 }
 
 bool ConnectionEngine::loadOrCreateIdentity(const std::string& path,
@@ -939,10 +965,23 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
     return false;
   }
   try {
+    // Milestone: our long-term identity is unlocked and ready to sign with.
+    // Fingerprint hex is public (the same value IdentityStore::fingerprint_hex
+    // produces for the "identity ready" UI elsewhere); no private key bytes.
+    emitStep(HandshakeStep::Id::IdentityReady,
+             "Identity unlocked (Ed25519): fingerprint " +
+                 IdentityStore::fingerprint_hex(identity_.pub), identity_.pub.size());
+
     KyberKEM kem;
     kem.init();
     std::vector<uint8_t> pk, sk;
     kem.keypair(pk, sk);
+
+    // Milestone: ephemeral Kyber-512 keypair generated. Only the PUBLIC key
+    // size is reported; the secret key never leaves this function.
+    emitStep(HandshakeStep::Id::KemKeypair,
+             "Kyber-512 ephemeral keypair generated: public key " +
+                 std::to_string(pk.size()) + " bytes", pk.size());
 
     // Msg 1 (client -> server): fully anonymous -- version + our ephemeral KEM
     // public key only. No identity material of any kind travels in msg1, so a
@@ -960,6 +999,12 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       errorOut = "Failed to send HandshakeHello";
       return false;
     }
+
+    // Milestone: msg1 is on the wire. Deliberately anonymous -- no identity
+    // material of any kind was included.
+    emitStep(HandshakeStep::Id::HelloSent,
+             "Anonymous Hello sent (no identity on the wire): " +
+                 std::to_string(hello_bytes.size()) + " bytes", hello_bytes.size());
 
     // Msg 2 (server -> client): HandshakeResponse.
     std::vector<uint8_t> resp_frame;
@@ -988,6 +1033,14 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
     std::vector<uint8_t> ss;
     kem.decapsulate(ct, sk, ss);
 
+    // Milestone: KEM ciphertext decapsulated. Only the PUBLIC ciphertext size
+    // is reported -- never the shared secret itself or its length-derived
+    // guess; ss is a fixed 32 bytes for Kyber-512 regardless, so nothing
+    // about it is inferable from what we report here anyway.
+    emitStep(HandshakeStep::Id::Decapsulated,
+             "KEM ciphertext decapsulated (" + std::to_string(ct.size()) +
+                 " bytes) -> shared secret established", ct.size());
+
     // Derive the identity-concealing key the instant the shared secret
     // exists -- BEFORE either side's long-term identity has been exchanged --
     // so the server's identity material can be opened.
@@ -1003,6 +1056,15 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       return false;
     }
 
+    // Milestone: the server's identity claim is unsealed (AEAD open
+    // succeeded), but not yet signature-verified. server_pub is a PUBLIC key;
+    // reporting its fingerprint here is the same value pin_store/TOFU will
+    // check the handshake's return value against.
+    emitStep(HandshakeStep::Id::IdentityOpened,
+             "Server identity unsealed (AES-256-GCM): fingerprint " +
+                 IdentityStore::fingerprint_hex(server_pub) + " (pending signature check)",
+             server_pub.size());
+
     // Recompute H_s from the fields we now hold and verify the server
     // signature over "E2EE-HS-v2|server|" || H_s.
     const auto H_s = transcriptHashServer(protocol::kVersion, pk, ct, server_pub);
@@ -1013,6 +1075,15 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       errorOut = "Server signature verification failed";
       return false;
     }
+
+    // Milestone: server's Ed25519 signature over the transcript hash H_s
+    // verified. This is the moment the server's claimed identity is actually
+    // trustworthy (bound to this exact transcript, not just unsealed).
+    emitStep(HandshakeStep::Id::SignatureVerified,
+             "Server signature verified over transcript hash H_s (Ed25519, " +
+                 std::to_string(server_sig.size()) + "-byte sig): identity confirmed " +
+                 IdentityStore::fingerprint_hex(server_pub),
+             server_sig.size());
 
     // Independent key-confirmation key, derived from the same shared secret.
     auto k_confirm = hkdf_sha256(ss, protocol::hkdf_salt(), protocol::hkdf_info_confirm(), 32);
@@ -1028,6 +1099,10 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       errorOut = "Server key confirmation failed";
       return false;
     }
+
+    // Milestone: server proved it derived the same shared secret as us.
+    emitStep(HandshakeStep::Id::ConfirmVerified,
+             "Server key confirmation verified (HMAC-SHA256 over H_s)", confirm_s.size());
 
     // H_c extends H_s with our own identity key, so our signature over it
     // commits to exactly which server identity we talked to (prevents
@@ -1049,6 +1124,14 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
       errorOut = ex.what();
       return false;
     }
+
+    // Milestone: our own identity signed (over H_c, binding exactly which
+    // server we talked to) and sealed under k_outer for msg3. Sizes only --
+    // client_sig/conf_sealed are public-length artifacts, not secrets.
+    emitStep(HandshakeStep::Id::IdentitySealed,
+             "Our identity signed (Ed25519, " + std::to_string(client_sig.size()) +
+                 "-byte sig) and sealed (AES-256-GCM, " + std::to_string(conf_sealed.size()) +
+                 " bytes) for Confirm", conf_sealed.size());
 
     HandshakeConfirm conf;
     conf.set_sealed_nonce(std::string(reinterpret_cast<const char*>(conf_nonce.data()), conf_nonce.size()));
@@ -1093,7 +1176,20 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
     OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
     OPENSSL_cleanse(k_file.data(), k_file.size());
 
+    // Milestone: directional session keys derived. Fires AFTER every cleanse
+    // above so nothing about the observer call can interfere with that
+    // ordering; 32 is the fixed, public AES-256 key length, not secret data.
+    emitStep(HandshakeStep::Id::KeysDerived,
+             "Directional AES-256-GCM keys (k_c2s, k_s2c) + confirmation key "
+             "derived via HKDF-SHA256", 32);
+
     peerFingerprintOut = IdentityStore::fingerprint_hex(server_pub);
+
+    // Milestone: handshake complete, session usable.
+    emitStep(HandshakeStep::Id::Complete,
+             "Handshake complete (client role): session established with peer " +
+                 peerFingerprintOut, 0);
+
     return true;
   } catch (const std::exception& ex) {
     errorOut = ex.what();
@@ -1110,6 +1206,11 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
     return false;
   }
   try {
+    // Milestone: our long-term identity is unlocked and ready to sign with.
+    emitStep(HandshakeStep::Id::IdentityReady,
+             "Identity unlocked (Ed25519): fingerprint " +
+                 IdentityStore::fingerprint_hex(identity_.pub), identity_.pub.size());
+
     // Msg 1 (client -> server): HandshakeHello -- fully anonymous, no identity
     // material of any kind.
     std::vector<uint8_t> frame;
@@ -1132,6 +1233,12 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
 
     std::vector<uint8_t> client_pk(hello.kem_public_key().begin(), hello.kem_public_key().end());
 
+    // Milestone: msg1 received. Anonymous by design -- no identity revealed.
+    emitStep(HandshakeStep::Id::HelloReceived,
+             "Anonymous Hello received: Kyber-512 public key " +
+                 std::to_string(client_pk.size()) + " bytes (no identity revealed)",
+             client_pk.size());
+
     KyberKEM kem;
     kem.init();
     // Reject an empty or wrong-size (including grossly oversized) KEM public
@@ -1144,6 +1251,12 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
 
     std::vector<uint8_t> ct, ss;
     kem.encapsulate(client_pk, ct, ss);
+
+    // Milestone: KEM encapsulated to the client's public key. Only the
+    // PUBLIC ciphertext size is reported, never the shared secret.
+    emitStep(HandshakeStep::Id::Encapsulated,
+             "KEM encapsulated to client's public key -> shared secret established, "
+             "ciphertext " + std::to_string(ct.size()) + " bytes", ct.size());
 
     // Derive the identity-concealing key and the key-confirmation key the
     // instant the shared secret exists.
@@ -1169,6 +1282,14 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       errorOut = ex.what();
       return false;
     }
+
+    // Milestone: our own identity signed (over H_s) and sealed under k_outer
+    // for msg2. Sizes only -- server_sig/sealed_identity are public-length
+    // artifacts, not secrets.
+    emitStep(HandshakeStep::Id::IdentitySealed,
+             "Our identity signed (Ed25519, " + std::to_string(server_sig.size()) +
+                 "-byte sig) and sealed (AES-256-GCM, " + std::to_string(sealed_identity.size()) +
+                 " bytes) for Response", sealed_identity.size());
 
     HandshakeResponse resp;
     resp.set_version(protocol::kVersion);
@@ -1225,6 +1346,13 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       return false;
     }
 
+    // Milestone: the client's identity claim is unsealed, not yet
+    // signature-verified. client_pub is a PUBLIC key.
+    emitStep(HandshakeStep::Id::IdentityOpened,
+             "Client identity unsealed (AES-256-GCM): fingerprint " +
+                 IdentityStore::fingerprint_hex(client_pub) + " (pending signature check)",
+             client_pub.size());
+
     // H_c extends H_s with the client's identity key: verify the client
     // committed to exactly OUR identity (prevents identity misbinding) and
     // that it derived the same shared secret.
@@ -1236,6 +1364,15 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       errorOut = "Client signature verification failed";
       return false;
     }
+
+    // Milestone: client's Ed25519 signature over the transcript hash H_c
+    // verified -- the client's claimed identity is now trustworthy.
+    emitStep(HandshakeStep::Id::SignatureVerified,
+             "Client signature verified over transcript hash H_c (Ed25519, " +
+                 std::to_string(client_sig.size()) + "-byte sig): identity confirmed " +
+                 IdentityStore::fingerprint_hex(client_pub),
+             client_sig.size());
+
     const auto expect_c = hmac_sha256(k_confirm, confirmMsg('c', H_c));
     if (!ct_equal(confirm_c, expect_c)) {
       OPENSSL_cleanse(ss.data(), ss.size());
@@ -1244,6 +1381,10 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
       errorOut = "Client key confirmation failed";
       return false;
     }
+
+    // Milestone: client proved it derived the same shared secret as us.
+    emitStep(HandshakeStep::Id::ConfirmVerified,
+             "Client key confirmation verified (HMAC-SHA256 over H_c)", confirm_c.size());
 
     // Only now, after mutual authentication is fully complete, derive and
     // install the directional session keys and the file key.
@@ -1268,7 +1409,20 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
     OPENSSL_cleanse(k_s2c.data(), k_s2c.size());
     OPENSSL_cleanse(k_file.data(), k_file.size());
 
+    // Milestone: directional session keys derived. Fires AFTER every cleanse
+    // above so nothing about the observer call can interfere with that
+    // ordering; 32 is the fixed, public AES-256 key length, not secret data.
+    emitStep(HandshakeStep::Id::KeysDerived,
+             "Directional AES-256-GCM keys (k_s2c, k_c2s) + confirmation key "
+             "derived via HKDF-SHA256", 32);
+
     peerFingerprintOut = IdentityStore::fingerprint_hex(client_pub);
+
+    // Milestone: handshake complete, session usable.
+    emitStep(HandshakeStep::Id::Complete,
+             "Handshake complete (server role): session established with peer " +
+                 peerFingerprintOut, 0);
+
     return true;
   } catch (const std::exception& ex) {
     errorOut = ex.what();
