@@ -7,8 +7,10 @@
 #include <boost/beast/ssl.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/ssl/host_name_verification.hpp>
+#include <atomic>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <string>
 
 #include <openssl/ssl.h>
@@ -49,8 +51,22 @@ struct BeastWebSocketTransport::Impl {
   std::unique_ptr<boost::beast::websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>>> wss;
   std::unique_ptr<boost::beast::websocket::stream<boost::beast::tcp_stream>> ws;
   ParsedUrl u;
-  bool open = false;
+  std::atomic<bool> open{false};
   bool allow_insecure_tls = false;
+
+  // Guards send()/close() so two threads can never write to the stream at
+  // the same time (Beast allows only one concurrent write). recv() is
+  // deliberately NOT guarded by this mutex -- holding it across the blocking
+  // read would deadlock any concurrent send(). Beast permits one concurrent
+  // read alongside one concurrent write, so an unguarded read racing a
+  // mutex-guarded write is safe.
+  std::mutex write_mtx;
+
+  // Set once the connection has been torn down via shutdown() or close().
+  // Makes both of those idempotent and turns send()/close() into no-ops
+  // afterward; recv() checks it up front so it never touches a torn-down
+  // stream after the fact.
+  std::atomic<bool> closed_{false};
 
   bool connect(const std::string& url) {
     if (!parse_ws_url(url, u)) return false;
@@ -104,7 +120,9 @@ struct BeastWebSocketTransport::Impl {
   }
 
   bool send(const std::vector<uint8_t>& data) {
-    if (!open) return false;
+    if (closed_ || !open) return false;
+    std::lock_guard<std::mutex> lock(write_mtx);
+    if (closed_ || !open) return false;  // re-check: may have raced shutdown()/close()
     boost::system::error_code ec;
     if (wss) {
       wss->binary(true);
@@ -117,7 +135,7 @@ struct BeastWebSocketTransport::Impl {
   }
 
   bool recv(std::vector<uint8_t>& out) {
-    if (!open) return false;
+    if (closed_ || !open) return false;
     boost::beast::flat_buffer buffer;
     boost::system::error_code ec;
     if (wss) {
@@ -131,8 +149,15 @@ struct BeastWebSocketTransport::Impl {
     return true;
   }
 
+  // Graceful WebSocket close: writes a close frame and waits for the peer's
+  // reply per the Beast handshake. Only safe to call when no other thread is
+  // concurrently blocked in recv() on this stream -- callers that have a
+  // reader thread parked in recv() MUST call shutdown() and join that thread
+  // first. A no-op once shutdown()/close() has already run.
   void close() {
+    if (closed_.exchange(true)) return;  // idempotent
     if (!open) return;
+    std::lock_guard<std::mutex> lock(write_mtx);
     boost::system::error_code ec;
     if (wss) {
       wss->close(boost::beast::websocket::close_code::normal, ec);
@@ -141,9 +166,34 @@ struct BeastWebSocketTransport::Impl {
     }
     open = false;
   }
+
+  // See header comment on BeastWebSocketTransport::shutdown().
+  void shutdown() {
+    if (closed_.exchange(true)) return;  // idempotent
+    using tcp = boost::asio::ip::tcp;
+    boost::system::error_code ec;
+    if (wss) {
+      auto& sock = boost::beast::get_lowest_layer(*wss).socket();
+      sock.cancel(ec);
+      ec.clear();
+      sock.shutdown(tcp::socket::shutdown_both, ec);
+    } else if (ws) {
+      auto& sock = boost::beast::get_lowest_layer(*ws).socket();
+      sock.cancel(ec);
+      ec.clear();
+      sock.shutdown(tcp::socket::shutdown_both, ec);
+    }
+    open = false;
+  }
 };
 
 BeastWebSocketTransport::BeastWebSocketTransport() : impl_(new Impl) {}
+// close() is idempotent (guarded by Impl::closed_) whether or not shutdown()
+// was already called, so this is safe in all cases: if the caller already
+// called shutdown() (and joined any reader thread), close() here is a no-op;
+// if not, it performs a normal single-threaded graceful close. Either way
+// there is exactly one owner of impl_ (this object), so delete cannot
+// double-free, and nothing re-enters the stream after this point.
 BeastWebSocketTransport::~BeastWebSocketTransport() { close(); delete impl_; }
 
 bool BeastWebSocketTransport::connect_url(const std::string& url) {
@@ -159,4 +209,5 @@ bool BeastWebSocketTransport::connect_url(const std::string& url) {
 bool BeastWebSocketTransport::send(const std::vector<uint8_t>& data) { return impl_->send(data); }
 bool BeastWebSocketTransport::recv(std::vector<uint8_t>& out) { return impl_->recv(out); }
 void BeastWebSocketTransport::close() { impl_->close(); }
+void BeastWebSocketTransport::shutdown() { impl_->shutdown(); }
 void BeastWebSocketTransport::set_insecure_tls(bool allow) { impl_->allow_insecure_tls = allow; }

@@ -167,8 +167,17 @@ int main(int argc, char* argv[]) {
     if (!ws.send(frame)) { std::cerr << "Send failed\n"; break; }
   }
   running = false;
-  ws.close();
+  // shutdown() tears down the underlying socket (cancel + shutdown_both)
+  // without writing a WebSocket close frame, so it can never race the rx
+  // thread's in-flight ws.recv(). It unblocks that blocked read promptly,
+  // whereas ws.close() here would collide with the concurrent read and trip
+  // Beast's "one reader + one writer" assertion (UB in release builds).
+  ws.shutdown();
   if (rx.joinable()) rx.join();
+  // Now single-threaded (rx has exited): an optional best-effort graceful
+  // close. It's a no-op since shutdown() already tore the connection down,
+  // kept here in case that ever changes.
+  ws.close();
 
   return 0;
 }
