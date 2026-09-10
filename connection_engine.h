@@ -128,10 +128,13 @@ private:
 
   // Encrypt one protocol message of the given kind into a serialized Envelope
   // (shared by the text and file send paths). Advances the send seq counter.
+  // `body` becomes InnerMessage.body; all other metadata (sender/recipient,
+  // timestamp, seq, kind, transfer id, chunk index) is sealed inside the same
+  // encrypted InnerMessage rather than sent as plaintext (sealed sender).
   bool encryptAndSerializeKind(uint32_t kind,
                                uint64_t transferId,
                                uint64_t chunkIndex,
-                               const std::vector<uint8_t>& plaintext,
+                               const std::vector<uint8_t>& body,
                                const std::string& senderId,
                                const std::string& toUsername,
                                std::vector<uint8_t>& outBytes,

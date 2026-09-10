@@ -11,8 +11,10 @@ enum ContentKind {
   KIND_FILE_FIN    = 4;  // encrypted_content = empty; end-of-transfer marker
 }
 
-// This is the definition of our chat message structure.
-// It's like defining a class or a struct.
+// Legacy chat message structure. Superseded by InnerMessage (sealed-sender
+// hardening): sender_id and the other fields below used to be plaintext on
+// the wire. No longer produced or consumed by ConnectionEngine; kept
+// defined only so old field numbers stay documented/unavailable.
 message ChatMessage {
   // Field 1: The ID or username of the sender (still visible for routing).
   string sender_id = 1;
@@ -42,6 +44,24 @@ message ChatMessage {
   // Field 8: 0-based chunk index; only meaningful for KIND_FILE_CHUNK. 0 for
   // text/offer/fin. Bound into the AEAD AAD so the relay cannot reorder chunks.
   uint64 chunk_index = 8;
+}
+
+// Sealed-sender inner message. This is what actually gets encrypted (after
+// length-framing + padding, see connection_engine.cpp's framePlaintext /
+// unframePlaintext). ALL per-message metadata that used to be plaintext on
+// ChatMessage/Envelope now lives here, so it is both confidential AND
+// authenticated (it's inside the AEAD ciphertext, not the AAD): the relay can
+// no longer read sender_id, recipient, timestamp, seq, kind, transfer_id or
+// chunk_index.
+message InnerMessage {
+  string sender_id      = 1;  // sender's username/id
+  string recipient_id   = 2;  // was Envelope.to_username
+  int64  timestamp_unix = 3;  // sender wall clock
+  uint64 seq            = 4;  // per-session monotonic sequence number
+  uint32 kind           = 5;  // ContentKind
+  uint64 transfer_id    = 6;  // 0 for text; shared across one file transfer's messages
+  uint64 chunk_index    = 7;  // 0-based; only meaningful for KIND_FILE_CHUNK
+  bytes  body           = 8;  // text bytes / serialized FileMeta / raw chunk / empty
 }
 
 // Metadata for a file transfer, carried INSIDE the encrypted KIND_FILE_OFFER

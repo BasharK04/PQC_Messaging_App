@@ -1,6 +1,7 @@
 // Minimal in-memory handshake + message roundtrip using ConnectionEngine.
 // No sockets; uses two queues as channels.
 
+#include <algorithm>
 #include <condition_variable>
 #include <filesystem>
 #include <iostream>
@@ -8,6 +9,7 @@
 #include <queue>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <google/protobuf/stubs/common.h>
 
@@ -16,41 +18,35 @@
 #include "handshake.pb.h"
 #include "messages.pb.h"
 
-// Re-encode a frame with the inner ChatMessage's sender_id mutated. This flips a
-// byte of the AUTHENTICATED metadata (bound into the GCM AAD) without touching
-// the ciphertext, so a correct implementation must fail the tag on decrypt.
-static bool tamper_sender_id(const std::vector<uint8_t>& in,
-                             std::vector<uint8_t>& out) {
+// Flip one byte inside Envelope.ciphertext (the sealed-sender AEAD output).
+// Since ALL per-message metadata now lives inside the ciphertext, this is the
+// only way left to "tamper metadata" from outside the engine: it must fail
+// GCM tag verification just like tampering the visible-text portion would.
+static bool tamper_ciphertext_byte(const std::vector<uint8_t>& in,
+                                   std::vector<uint8_t>& out) {
   Envelope env;
   if (!env.ParseFromArray(in.data(), static_cast<int>(in.size()))) return false;
-  ChatMessage inner;
-  if (!inner.ParseFromArray(env.payload_e2e().data(),
-                            static_cast<int>(env.payload_e2e().size())))
-    return false;
-  inner.set_sender_id(inner.sender_id() + "X");  // tamper metadata only
-  std::string inner_bytes;
-  if (!inner.SerializeToString(&inner_bytes)) return false;
-  env.set_payload_e2e(inner_bytes);
+  std::string ct = env.ciphertext();
+  if (ct.empty()) return false;
+  ct[0] ^= 0x01;
+  env.set_ciphertext(ct);
   std::string env_bytes;
   if (!env.SerializeToString(&env_bytes)) return false;
   out.assign(env_bytes.begin(), env_bytes.end());
   return true;
 }
 
-// Flip a bit in the HandshakeResponse's key-confirmation MAC ONLY (the field
-// the server signature does not cover). A correct client must still verify the
-// server signature (valid) but then reject on the confirmation mismatch.
-static bool tamper_response_confirm(const std::vector<uint8_t>& in,
-                                    std::vector<uint8_t>& out) {
-  HandshakeResponse resp;
-  if (!resp.ParseFromArray(in.data(), static_cast<int>(in.size()))) return false;
-  std::string c = resp.confirm();
-  if (c.empty()) return false;
-  c[0] ^= 0x01;
-  resp.set_confirm(c);
-  std::string bytes;
-  if (!resp.SerializeToString(&bytes)) return false;
-  out.assign(bytes.begin(), bytes.end());
+// Flip the Envelope.version field. It is bound into the AEAD AAD, so changing
+// it must break tag verification even though the ciphertext bytes themselves
+// are untouched.
+static bool tamper_version(const std::vector<uint8_t>& in,
+                           std::vector<uint8_t>& out) {
+  Envelope env;
+  if (!env.ParseFromArray(in.data(), static_cast<int>(in.size()))) return false;
+  env.set_version(env.version() + 1);
+  std::string env_bytes;
+  if (!env.SerializeToString(&env_bytes)) return false;
+  out.assign(env_bytes.begin(), env_bytes.end());
   return true;
 }
 
@@ -76,6 +72,14 @@ static bool recv_from(Channel& ch, std::vector<uint8_t>& out) {
   out = std::move(ch.q.front());
   ch.q.pop();
   return true;
+}
+
+// Does `haystack` contain `needle` as a contiguous byte run? Used to prove
+// sender/recipient identifiers never appear in the raw serialized frame.
+static bool bytes_contain(const std::vector<uint8_t>& haystack, const std::string& needle) {
+  if (needle.empty() || needle.size() > haystack.size()) return false;
+  const auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end());
+  return it != haystack.end();
 }
 
 int main() {
@@ -172,24 +176,122 @@ int main() {
     std::cout << "replay correctly rejected: " << err << "\n";
   }
 
-  // ---- 3) Flipping an authenticated metadata byte must FAIL decryption ----
+  // ---- 3) Sealed sender: no plaintext metadata on the wire ----
+  // Build a text message with distinctive sender/recipient identifiers,
+  // serialize the frame, and assert the raw bytes contain NEITHER. This is
+  // the core anonymity property of the redesign: sender_id and recipient_id
+  // (formerly ChatMessage.sender_id and Envelope.to_username, both plaintext)
+  // now live only inside the AEAD ciphertext.
+  {
+    const std::string sender = "alice-unique-sender-id";
+    const std::string recipient = "bob-unique-recipient-id";
+    std::vector<uint8_t> sealed;
+    if (!client.encryptAndSerializeMessage("metadata should be sealed", sender, recipient,
+                                           sealed, err)) {
+      std::cerr << "encrypt(sealed-sender probe) failed: " << err << "\n"; return 1;
+    }
+    if (bytes_contain(sealed, sender)) {
+      std::cerr << "SECURITY FAIL: sender id appears in plaintext on the wire\n"; return 1;
+    }
+    if (bytes_contain(sealed, recipient)) {
+      std::cerr << "SECURITY FAIL: recipient id appears in plaintext on the wire\n"; return 1;
+    }
+    std::cout << "sealed sender: neither sender id nor recipient id found in "
+              << sealed.size() << "-byte frame\n";
+    // Consume it so it doesn't dangle in the server's inbound state / seq
+    // counter for the tests that follow.
+    std::string plain;
+    if (!server.parseAndDecryptMessage(sealed, plain, err)) {
+      std::cerr << "decrypt(sealed-sender probe) failed: " << err << "\n"; return 1;
+    }
+  }
+
+  // ---- 4) Length padding: frame size only reveals a size bucket ----
+  {
+    std::vector<uint8_t> small, mid, big;
+    if (!client.encryptAndSerializeMessage(std::string(5, 'a'), "client", "server", small, err) ||
+        !client.encryptAndSerializeMessage(std::string(200, 'b'), "client", "server", mid, err) ||
+        !client.encryptAndSerializeMessage(std::string(1000, 'c'), "client", "server", big, err)) {
+      std::cerr << "encrypt(padding probe) failed: " << err << "\n"; return 1;
+    }
+    if (small.size() != mid.size()) {
+      std::cerr << "SECURITY FAIL: a 5-byte and a 200-byte message produced "
+                << "different frame sizes (" << small.size() << " vs " << mid.size()
+                << "); length leaks\n";
+      return 1;
+    }
+    std::cout << "length padding: 5-byte and 200-byte messages both produced "
+              << small.size() << "-byte frames (same bucket)\n";
+    if (big.size() <= small.size()) {
+      std::cerr << "SECURITY FAIL: a ~1000-byte message did not land in a larger "
+                << "bucket than a 5-byte message (" << big.size() << " vs "
+                << small.size() << ")\n";
+      return 1;
+    }
+    std::cout << "length padding: ~1000-byte message landed in a larger bucket ("
+              << big.size() << " > " << small.size() << ")\n";
+    // Drain them so seq/order stays consistent for what follows.
+    std::string plain;
+    if (!server.parseAndDecryptMessage(small, plain, err) ||
+        !server.parseAndDecryptMessage(mid, plain, err) ||
+        !server.parseAndDecryptMessage(big, plain, err)) {
+      std::cerr << "decrypt(padding probe) failed: " << err << "\n"; return 1;
+    }
+  }
+
+  // ---- 5) Tamper detection: ciphertext byte flip must FAIL decryption ----
   {
     std::vector<uint8_t> frame2;
     if (!client.encryptAndSerializeMessage("second message", "client", "server", frame2, err)) {
       std::cerr << "encrypt(2) failed: " << err << "\n"; return 1;
     }
     std::vector<uint8_t> tampered;
-    if (!tamper_sender_id(frame2, tampered)) {
+    if (!tamper_ciphertext_byte(frame2, tampered)) {
       std::cerr << "tamper helper failed\n"; return 1;
     }
     std::string plain;
     if (server.parseAndDecryptMessage(tampered, plain, err)) {
-      std::cerr << "SECURITY FAIL: AAD-tampered frame was accepted\n"; return 1;
+      std::cerr << "SECURITY FAIL: ciphertext-tampered frame was accepted\n"; return 1;
     }
-    std::cout << "AAD tamper correctly rejected: " << err << "\n";
+    std::cout << "ciphertext tamper correctly rejected: " << err << "\n";
+
+    // The untampered frame behind it must still decrypt fine (proves the
+    // tamper helper only mutated the copy, not the real frame/seq state).
+    std::string plain2;
+    if (!server.parseAndDecryptMessage(frame2, plain2, err)) {
+      std::cerr << "decrypt(post-tamper genuine frame) failed: " << err << "\n"; return 1;
+    }
+    if (plain2 != "second message") {
+      std::cerr << "post-tamper genuine round-trip mismatch: got '" << plain2 << "'\n"; return 1;
+    }
   }
 
-  // ---- 4) A tampered server key-confirmation must be REJECTED by the client ----
+  // ---- 6) Tamper detection: version field flip must FAIL decryption (AAD) ----
+  {
+    std::vector<uint8_t> frame3;
+    if (!client.encryptAndSerializeMessage("third message", "client", "server", frame3, err)) {
+      std::cerr << "encrypt(3) failed: " << err << "\n"; return 1;
+    }
+    std::vector<uint8_t> tampered;
+    if (!tamper_version(frame3, tampered)) {
+      std::cerr << "tamper helper (version) failed\n"; return 1;
+    }
+    std::string plain;
+    if (server.parseAndDecryptMessage(tampered, plain, err)) {
+      std::cerr << "SECURITY FAIL: version-tampered frame was accepted\n"; return 1;
+    }
+    std::cout << "version tamper correctly rejected: " << err << "\n";
+
+    std::string plain3;
+    if (!server.parseAndDecryptMessage(frame3, plain3, err)) {
+      std::cerr << "decrypt(post-tamper genuine frame 3) failed: " << err << "\n"; return 1;
+    }
+    if (plain3 != "third message") {
+      std::cerr << "post-tamper genuine round-trip mismatch: got '" << plain3 << "'\n"; return 1;
+    }
+  }
+
+  // ---- 7) A tampered server key-confirmation must be REJECTED by the client ----
   // Runs a fresh 3-message handshake but flips the server's confirmation MAC in
   // flight. The server signature (over the transcript hash H) still verifies, so
   // this specifically exercises the HMAC key-confirmation step (item 3).
@@ -212,8 +314,16 @@ int main() {
     auto nc_recv = [&](std::vector<uint8_t>& f){
       std::vector<uint8_t> raw;
       if (!recv_from(ns2c, raw)) return false;
-      std::vector<uint8_t> tampered;
-      f = tamper_response_confirm(raw, tampered) ? tampered : raw;
+      HandshakeResponse resp;
+      if (!resp.ParseFromArray(raw.data(), static_cast<int>(raw.size()))) { f = raw; return true; }
+      std::string c = resp.confirm();
+      if (!c.empty()) {
+        c[0] ^= 0x01;
+        resp.set_confirm(c);
+        std::string bytes;
+        if (resp.SerializeToString(&bytes)) { f.assign(bytes.begin(), bytes.end()); return true; }
+      }
+      f = raw;
       return true;
     };
 
@@ -243,4 +353,3 @@ int main() {
   google::protobuf::ShutdownProtobufLibrary();
   return 0;
 }
-

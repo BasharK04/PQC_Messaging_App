@@ -133,31 +133,80 @@ std::vector<uint8_t> confirmMsg(char tag, const std::vector<uint8_t>& H) {
   return m;
 }
 
-// Canonical authenticated header bound as AES-GCM AAD. Both sides reconstruct it
-// identically from: direction tag, sequence number, sender id, timestamp, content
-// kind, transfer id and chunk index. The sender_id is length-prefixed so it can
-// never collide with adjacent fields. kind/transferId/chunkIndex are all 0 for
-// plain text messages; for file messages they bind the chunk's position and the
-// transfer it belongs to into the GCM tag, so a relay can neither reorder chunks
-// within a transfer nor splice chunks across transfers.
-std::vector<uint8_t> buildMessageAad(uint8_t dirTag,
-                                     uint64_t seq,
-                                     const std::string& senderId,
-                                     int64_t timestamp,
-                                     uint8_t kind,
-                                     uint64_t transferId,
-                                     uint64_t chunkIndex) {
+// Canonical AAD bound into the AEAD tag: a per-direction constant plus the
+// protocol version. Sealed-sender hardening moved ALL per-message metadata
+// (sender id, seq, timestamp, kind, transfer id, chunk index) inside the
+// encrypted InnerMessage (see framePlaintext/unframePlaintext below), so it is
+// now confidential AND authenticated by the AEAD tag over the ciphertext
+// itself. The AAD therefore carries nothing that varies per message — it only
+// binds the direction (kills cross-direction reflection) and the version
+// (kills cross-version downgrade splicing).
+std::vector<uint8_t> buildMessageAad(uint8_t dirTag, uint32_t version) {
   std::vector<uint8_t> aad;
-  aad.reserve(1 + 8 + 4 + senderId.size() + 8 + 1 + 8 + 8);
+  aad.reserve(1 + 4);
   aad.push_back(dirTag);
-  put_u64_be(aad, seq);
-  put_u32_be(aad, static_cast<uint32_t>(senderId.size()));
-  aad.insert(aad.end(), senderId.begin(), senderId.end());
-  put_u64_be(aad, static_cast<uint64_t>(timestamp));
-  aad.push_back(kind);
-  put_u64_be(aad, transferId);
-  put_u64_be(aad, chunkIndex);
+  put_u32_be(aad, version);
   return aad;
+}
+
+// Padding buckets (bytes) for the framed AEAD plaintext, so ciphertext length
+// never reveals the true message size beyond which bucket it landed in.
+// Anything larger than the last fixed bucket rounds up to the next multiple
+// of that bucket's size (262144), which comfortably covers a 256 KiB file
+// chunk plus its InnerMessage/length-prefix overhead.
+constexpr size_t kPadBuckets[] = {
+    256, 512, 1024, 2048, 4096, 8192, 16384,
+    32768, 65536, 131072, 262144,
+};
+
+size_t paddedBucketSize(size_t total) {
+  for (size_t bucket : kPadBuckets) {
+    if (total <= bucket) return bucket;
+  }
+  constexpr size_t kUnit = 262144;
+  return ((total + kUnit - 1) / kUnit) * kUnit;
+}
+
+// Frame the serialized InnerMessage as [4-byte BE length][InnerMessage bytes]
+// [random padding], padded so the TOTAL length lands exactly on a bucket
+// boundary. This is what actually gets AEAD-encrypted, so ciphertext size
+// only ever leaks a size bucket, never the true plaintext length.
+std::vector<uint8_t> framePlaintext(const std::vector<uint8_t>& innerBytes) {
+  const size_t total = 4 + innerBytes.size();
+  const size_t bucket = paddedBucketSize(total);
+
+  std::vector<uint8_t> out;
+  out.reserve(bucket);
+  put_u32_be(out, static_cast<uint32_t>(innerBytes.size()));
+  out.insert(out.end(), innerBytes.begin(), innerBytes.end());
+
+  const size_t padLen = bucket - total;
+  if (padLen > 0) {
+    std::vector<uint8_t> pad(padLen);
+    if (RAND_bytes(pad.data(), static_cast<int>(pad.size())) != 1) {
+      throw std::runtime_error("RAND_bytes failed (padding)");
+    }
+    out.insert(out.end(), pad.begin(), pad.end());
+  }
+  return out;
+}
+
+// Inverse of framePlaintext: read the 4-byte BE length prefix, validate it
+// against the decrypted plaintext size, and hand back exactly those L bytes
+// (the trailing padding is discarded). Returns false on a malformed frame
+// (too short, or a declared length that overruns the plaintext).
+bool unframePlaintext(const std::vector<uint8_t>& plain,
+                      std::vector<uint8_t>& innerOut) {
+  if (plain.size() < 4) return false;
+  const uint32_t len = (static_cast<uint32_t>(plain[0]) << 24) |
+                       (static_cast<uint32_t>(plain[1]) << 16) |
+                       (static_cast<uint32_t>(plain[2]) << 8) |
+                       static_cast<uint32_t>(plain[3]);
+  if (static_cast<uint64_t>(len) > static_cast<uint64_t>(plain.size() - 4)) {
+    return false;
+  }
+  innerOut.assign(plain.begin() + 4, plain.begin() + 4 + len);
+  return true;
 }
 
 // Random nonzero 64-bit transfer id (0 is reserved for "not a file transfer").
@@ -244,7 +293,7 @@ bool ConnectionEngine::runServerHandshake(const SendFrameFn& send,
 bool ConnectionEngine::encryptAndSerializeKind(uint32_t kind,
                                                uint64_t transferId,
                                                uint64_t chunkIndex,
-                                               const std::vector<uint8_t>& plaintext,
+                                               const std::vector<uint8_t>& body,
                                                const std::string& senderId,
                                                const std::string& toUsername,
                                                std::vector<uint8_t>& outBytes,
@@ -254,40 +303,46 @@ bool ConnectionEngine::encryptAndSerializeKind(uint32_t kind,
     return false;
   }
   try {
-    // Stamp a fresh monotonic sequence number and current timestamp, then bind
-    // direction + seq + sender + timestamp + kind + transfer id + chunk index
-    // into the AEAD AAD. Text and file messages share one seq space, so a relay
-    // can neither drop nor reorder file chunks relative to chat traffic.
+    // Stamp a fresh monotonic sequence number and current timestamp. Text and
+    // file messages share one seq space, so a relay can neither drop nor
+    // reorder file chunks relative to chat traffic.
     const uint64_t seq = session_.next_send_seq();
     const int64_t ts = nowSeconds();
     const uint8_t dirTag = (role_ == Role::Server) ? kDirS2C : kDirC2S;
-    const auto aad = buildMessageAad(dirTag, seq, senderId, ts,
-                                     static_cast<uint8_t>(kind), transferId, chunkIndex);
 
-    auto nonce = AESGCMCrypto::random_nonce();
-    auto ct_tag = session_.encrypt(plaintext, nonce, aad);
-
-    ChatMessage inner;
+    // ALL per-message metadata (sender, recipient, timestamp, seq, kind,
+    // transfer id, chunk index) goes INSIDE the InnerMessage, which is what
+    // gets encrypted. Nothing but a direction tag and the version is bound as
+    // AAD, so none of this leaks to the relay and none of it can be tampered
+    // with independently of the ciphertext it travels in.
+    InnerMessage inner;
     inner.set_sender_id(senderId);
+    inner.set_recipient_id(toUsername);
     inner.set_timestamp_unix(ts);
     inner.set_seq(seq);
     inner.set_kind(kind);
     inner.set_transfer_id(transferId);
     inner.set_chunk_index(chunkIndex);
-    inner.set_nonce(reinterpret_cast<const char*>(nonce.data()), nonce.size());
-    inner.set_encrypted_content(reinterpret_cast<const char*>(ct_tag.data()), ct_tag.size());
+    inner.set_body(reinterpret_cast<const char*>(body.data()), body.size());
 
     std::string inner_bytes;
     if (!inner.SerializeToString(&inner_bytes)) {
-      errorOut = "Failed to serialize ChatMessage";
+      errorOut = "Failed to serialize InnerMessage";
       return false;
     }
 
+    // Frame + pad to a fixed size bucket BEFORE encrypting, so the ciphertext
+    // length only ever reveals a size bucket, never the true message length.
+    const std::vector<uint8_t> innerVec(inner_bytes.begin(), inner_bytes.end());
+    const auto plain = framePlaintext(innerVec);
+
+    auto nonce = AESGCMCrypto::random_nonce();
+    auto ct_tag = session_.encrypt(plain, nonce, buildMessageAad(dirTag, protocol::kVersion));
+
     Envelope env;
     env.set_version(protocol::kVersion);
-    env.set_to_username(toUsername);
-    env.set_client_timestamp(nowSeconds());
-    env.set_payload_e2e(inner_bytes);
+    env.set_nonce(reinterpret_cast<const char*>(nonce.data()), nonce.size());
+    env.set_ciphertext(reinterpret_cast<const char*>(ct_tag.data()), ct_tag.size());
 
     std::string env_bytes;
     if (!env.SerializeToString(&env_bytes)) {
@@ -309,8 +364,9 @@ bool ConnectionEngine::encryptAndSerializeMessage(const std::string& plaintext,
                                                   std::vector<uint8_t>& outBytes,
                                                   std::string& errorOut) {
   // Chat text is just KIND_TEXT with no transfer identity. The real kind is
-  // written on the wire AND bound into the AAD, so an attacker cannot re-label a
-  // text message as a file chunk (or vice versa) without breaking the GCM tag.
+  // carried inside the encrypted InnerMessage, so an attacker cannot re-label
+  // a text message as a file chunk (or vice versa) without breaking the GCM
+  // tag over the ciphertext that kind is sealed inside of.
   return encryptAndSerializeKind(static_cast<uint32_t>(KIND_TEXT), 0, 0,
                                  std::vector<uint8_t>(plaintext.begin(), plaintext.end()),
                                  senderId, toUsername, outBytes, errorOut);
@@ -485,9 +541,36 @@ bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
     errorOut = "Malformed Envelope";
     return false;
   }
-  ChatMessage inner;
-  if (!inner.ParseFromArray(env.payload_e2e().data(), static_cast<int>(env.payload_e2e().size()))) {
-    errorOut = "Malformed ChatMessage";
+  if (env.version() != protocol::kVersion) {
+    errorOut = "Unsupported/mismatched protocol version in Envelope";
+    return false;
+  }
+
+  // Reconstruct the SAME AAD the sender bound: direction + version only. The
+  // peer's sending direction is the opposite of ours. Everything else that
+  // used to be bound as AAD (seq/sender/timestamp/kind/transfer id/chunk
+  // index) is now confidential AND authenticated because it sits INSIDE the
+  // ciphertext, sealed by the same GCM tag.
+  const uint8_t dirTag = (role_ == Role::Server) ? kDirC2S : kDirS2C;
+  const std::vector<uint8_t> nonce(env.nonce().begin(), env.nonce().end());
+  const std::vector<uint8_t> ct_tag(env.ciphertext().begin(), env.ciphertext().end());
+  std::vector<uint8_t> plain;
+  try {
+    // Authenticate first (this fails on any ciphertext/version tampering)...
+    plain = session_.decrypt(ct_tag, nonce, buildMessageAad(dirTag, env.version()));
+  } catch (const std::exception& ex) {
+    errorOut = ex.what();
+    return false;
+  }
+
+  std::vector<uint8_t> innerBytes;
+  if (!unframePlaintext(plain, innerBytes)) {
+    errorOut = "Malformed padded plaintext frame";
+    return false;
+  }
+  InnerMessage inner;
+  if (!inner.ParseFromArray(innerBytes.data(), static_cast<int>(innerBytes.size()))) {
+    errorOut = "Malformed InnerMessage";
     return false;
   }
 
@@ -503,28 +586,9 @@ bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
     return false;
   }
 
-  // Reconstruct the SAME AAD the sender bound; the peer's sending direction is
-  // the opposite of ours. The kind/transfer id/chunk index come straight off the
-  // wire (never normalised) so any tampering with them fails tag verification.
-  const uint8_t dirTag = (role_ == Role::Server) ? kDirC2S : kDirS2C;
-  const auto aad = buildMessageAad(dirTag, seq, inner.sender_id(), ts,
-                                   static_cast<uint8_t>(inner.kind()),
-                                   inner.transfer_id(), inner.chunk_index());
-
-  std::vector<uint8_t> nonce(inner.nonce().begin(), inner.nonce().end());
-  std::vector<uint8_t> ct_tag(inner.encrypted_content().begin(), inner.encrypted_content().end());
-  std::vector<uint8_t> plain;
-  try {
-    // Authenticate first (this fails on any AAD/metadata tampering)...
-    plain = session_.decrypt(ct_tag, nonce, aad);
-  } catch (const std::exception& ex) {
-    errorOut = ex.what();
-    return false;
-  }
-
   // ...then enforce strict monotonic sequencing to reject replays / reordering.
-  // Done only after a successful tag check so an unauthenticated frame cannot
-  // poison the counter.
+  // Done only after a successful tag check (and after parsing the now-trusted
+  // metadata out of it) so an unauthenticated frame cannot poison the counter.
   if (!session_.accept_recv_seq(seq)) {
     errorOut = "replay or reordering detected (non-monotonic seq)";
     return false;
@@ -533,13 +597,14 @@ bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
   ev = IncomingEvent{};
   const uint32_t kind = inner.kind();
   const uint64_t transferId = inner.transfer_id();
+  const std::vector<uint8_t> body(inner.body().begin(), inner.body().end());
 
   // KIND_UNSPECIFIED (0) is treated as text for wire compatibility with peers
   // that predate the file-transfer kinds.
   if (kind == static_cast<uint32_t>(KIND_UNSPECIFIED) ||
       kind == static_cast<uint32_t>(KIND_TEXT)) {
     ev.type = IncomingEvent::Type::Text;
-    ev.text.assign(plain.begin(), plain.end());
+    ev.text.assign(body.begin(), body.end());
     return true;
   }
 
@@ -558,7 +623,7 @@ bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
     }
 
     FileMeta meta;
-    if (!meta.ParseFromArray(plain.data(), static_cast<int>(plain.size()))) {
+    if (!meta.ParseFromArray(body.data(), static_cast<int>(body.size()))) {
       errorOut = "Malformed FileMeta in file offer";
       return false;
     }
@@ -648,7 +713,7 @@ bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
     }
     InboundTransfer& t = it->second;
     const uint64_t idx = inner.chunk_index();
-    const uint64_t len = static_cast<uint64_t>(plain.size());
+    const uint64_t len = static_cast<uint64_t>(body.size());
 
     // Chunks must arrive in exactly the order they were produced, and the
     // declared geometry from the offer is the only thing we will write.
@@ -665,7 +730,7 @@ bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
       return false;
     }
 
-    t.out.write(reinterpret_cast<const char*>(plain.data()),
+    t.out.write(reinterpret_cast<const char*>(body.data()),
                 static_cast<std::streamsize>(len));
     if (!t.out) {
       const std::string tmp = t.tempPath;
@@ -674,7 +739,7 @@ bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
       return false;
     }
     try {
-      t.hmac->update(plain.data(), plain.size());
+      t.hmac->update(body.data(), body.size());
     } catch (const std::exception& ex) {
       abortInboundTransfer(transferId);
       errorOut = ex.what();
@@ -699,7 +764,7 @@ bool ConnectionEngine::parseAndDecryptEvent(const std::vector<uint8_t>& frame,
       return false;
     }
     InboundTransfer& t = it->second;
-    if (!plain.empty() || t.nextChunkIndex != t.chunkCount ||
+    if (!body.empty() || t.nextChunkIndex != t.chunkCount ||
         t.bytesWritten != t.sizeBytes) {
       abortInboundTransfer(transferId);
       errorOut = "incomplete file transfer";
