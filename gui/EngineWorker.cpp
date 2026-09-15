@@ -121,10 +121,6 @@ void EngineWorker::startConnect(const QString& endpoint, const QString& password
   mode_ = Mode::TCP;
   isConnected_ = true;
   running_ = true;
-  emit status("Handshake complete. Session established (client/TCP).");
-  if (!peerFingerprint.empty()) {
-    emit status(QString("Peer fingerprint: ") + shortenFingerprint(peerFingerprint));
-  }
   emit connected();
   rxThread_ = std::thread([this]{ this->recvLoop(); });
 }
@@ -171,10 +167,6 @@ void EngineWorker::startHost(quint16 port, const QString& password) {
   mode_ = Mode::TCP;
   isConnected_ = true;
   running_ = true;
-  emit status("Handshake complete. Session established (host/TCP).");
-  if (!peerFingerprint.empty()) {
-    emit status(QString("Peer fingerprint: ") + shortenFingerprint(peerFingerprint));
-  }
   emit connected();
   rxThread_ = std::thread([this]{ this->recvLoop(); });
 }
@@ -246,10 +238,6 @@ void EngineWorker::startRelayConnect(const QString& relayUrl, const QString& pee
   mode_ = Mode::WS;
   isConnected_ = true;
   running_ = true;
-  emit status("Handshake complete. Session established (relay/client).");
-  if (!peerFingerprint.empty()) {
-    emit status(QString("Peer fingerprint: ") + shortenFingerprint(peerFingerprint));
-  }
   emit connected();
   rxThread_ = std::thread([this]{ this->recvLoop(); });
 }
@@ -305,10 +293,6 @@ void EngineWorker::startRelayHost(const QString& relayUrl, const QString& myUser
   mode_ = Mode::WS;
   isConnected_ = true;
   running_ = true;
-  emit status("Handshake complete. Session established (relay/host).");
-  if (!peerFingerprint.empty()) {
-    emit status(QString("Peer fingerprint: ") + shortenFingerprint(peerFingerprint));
-  }
   emit connected();
   rxThread_ = std::thread([this]{ this->recvLoop(); });
 }

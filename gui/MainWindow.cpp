@@ -40,12 +40,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
   v->addLayout(row);
   setCentralWidget(central);
 
-  // ---- Key Exchange visualization dock: real handshake progress, driven by
-  // genuine ConnectionEngine observer events (see HandshakePanel/EngineWorker).
-  // Always visible (no close button) so it can't be lost by an accidental click.
+  // ---- Connection dock: a simple connection-status display plus the peer
+  // fingerprint/TOFU verification section (the app's real security
+  // boundary), driven by genuine ConnectionEngine/EngineWorker events -- see
+  // HandshakePanel. Always visible (no close button) so it can't be lost by
+  // an accidental click.
   handshakePanel_ = new HandshakePanel(this);
-  auto* handshakeDock = new QDockWidget(tr("Key Exchange"), this);
-  handshakeDock->setObjectName("KeyExchangeDock");
+  auto* handshakeDock = new QDockWidget(tr("Connection"), this);
+  handshakeDock->setObjectName("ConnectionDock");
   handshakeDock->setWidget(handshakePanel_);
   handshakeDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
   handshakeDock->setMinimumWidth(300);
@@ -94,8 +96,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent),
   connect(worker_, &EngineWorker::error,            this, &MainWindow::onWorkerError);
   connect(worker_, &EngineWorker::identityReady,    this, &MainWindow::onIdentityReady);
 
-  // Worker -> Key Exchange panel (queued across threads automatically; see
-  // EngineWorker.h). Genuine handshake events only -- no simulated steps.
+  // Worker -> Connection panel (queued across threads automatically; see
+  // EngineWorker.h). Genuine handshake/connection events only -- no
+  // simulated steps. handshakeStepOccurred still carries every fine-grained
+  // engine milestone; HandshakePanel now only reacts to ::Complete.
   connect(worker_, &EngineWorker::handshakeStarted,     handshakePanel_, &HandshakePanel::onHandshakeStarted);
   connect(worker_, &EngineWorker::handshakeStepOccurred, handshakePanel_, &HandshakePanel::onHandshakeStep);
   connect(worker_, &EngineWorker::ownFingerprintReady,  handshakePanel_, &HandshakePanel::onOwnFingerprint);
