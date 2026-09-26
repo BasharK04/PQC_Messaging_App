@@ -977,10 +977,10 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
     std::vector<uint8_t> pk, sk;
     kem.keypair(pk, sk);
 
-    // Milestone: ephemeral Kyber-512 keypair generated. Only the PUBLIC key
+    // Milestone: ephemeral ML-KEM-512 keypair generated. Only the PUBLIC key
     // size is reported; the secret key never leaves this function.
     emitStep(HandshakeStep::Id::KemKeypair,
-             "Kyber-512 ephemeral keypair generated: public key " +
+             "ML-KEM-512 ephemeral keypair generated: public key " +
                  std::to_string(pk.size()) + " bytes", pk.size());
 
     // Msg 1 (client -> server): fully anonymous -- version + our ephemeral KEM
@@ -1035,7 +1035,7 @@ bool ConnectionEngine::clientHandshakeInternal(const SendFrameFn& send,
 
     // Milestone: KEM ciphertext decapsulated. Only the PUBLIC ciphertext size
     // is reported -- never the shared secret itself or its length-derived
-    // guess; ss is a fixed 32 bytes for Kyber-512 regardless, so nothing
+    // guess; ss is a fixed 32 bytes for ML-KEM-512 regardless, so nothing
     // about it is inferable from what we report here anyway.
     emitStep(HandshakeStep::Id::Decapsulated,
              "KEM ciphertext decapsulated (" + std::to_string(ct.size()) +
@@ -1235,7 +1235,7 @@ bool ConnectionEngine::serverHandshakeInternal(const SendFrameFn& send,
 
     // Milestone: msg1 received. Anonymous by design -- no identity revealed.
     emitStep(HandshakeStep::Id::HelloReceived,
-             "Anonymous Hello received: Kyber-512 public key " +
+             "Anonymous Hello received: ML-KEM-512 public key " +
                  std::to_string(client_pk.size()) + " bytes (no identity revealed)",
              client_pk.size());
 

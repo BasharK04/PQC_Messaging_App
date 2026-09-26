@@ -2,7 +2,7 @@
 
 End-to-end encrypted 1:1 chat in C++17, built as a learning project around a
 post-quantum key exchange. Peers authenticate each other with Ed25519, agree on
-keys with CRYSTALS-Kyber-512, and talk through a small relay that never sees
+keys with ML-KEM-512, and talk through a small relay that never sees
 plaintext — and, as of the metadata work described below, never sees who is
 talking to whom either.
 
@@ -12,10 +12,10 @@ an honest account of what it does and does not protect against.
 
 ## Features
 
-- **Post-quantum key exchange** — CRYSTALS-Kyber-512 (via liboqs) with an
+- **Post-quantum key exchange** — ML-KEM-512 / FIPS 203 (via liboqs) with an
   Ed25519-authenticated, transcript-bound handshake and mutual HMAC key
   confirmation.
-- **Identity concealment** — the handshake opens with an anonymous Kyber
+- **Identity concealment** — the handshake opens with an anonymous ML-KEM
   exchange; both parties' public keys and signatures are encrypted before they
   ever reach the wire.
 - **Sealed-sender messaging** — sender, recipient, timestamps, sequence numbers
@@ -31,8 +31,8 @@ an honest account of what it does and does not protect against.
   opt-out for self-signed development relays.
 - **Opaque relay rooms** — clients join under a derived token rather than a
   human-readable room name.
-- **Qt GUI** with a live "Key Exchange" panel that visualizes the real handshake
-  as it happens.
+- **Qt GUI** with a "Connection" panel showing session status plus peer
+  fingerprint verification and a loud MITM warning on a pin mismatch.
 - **Encrypted chunked file transfer** at the engine level (see the note in
   [File transfer](#file-transfer) — it is not currently exposed in either UI).
 
@@ -121,7 +121,7 @@ rather than silently accepted. Key material is wiped with `OPENSSL_cleanse`.
 ### Handshake
 
 Three messages. The client's first message carries no identity at all, and each
-side's identity is encrypted under a key derived from the Kyber exchange before
+side's identity is encrypted under a key derived from the ML-KEM exchange before
 it is transmitted.
 
 ```
@@ -166,7 +166,7 @@ protocol version is both checked explicitly and bound into the transcript.
 
 ### Session keys
 
-HKDF-SHA256 expands the single Kyber shared secret into:
+HKDF-SHA256 expands the single ML-KEM shared secret into:
 
 - `k_c2s` and `k_s2c` — **directional** AES-256-GCM keys. Each side encrypts
   with its send key and decrypts with its receive key, which is what makes
@@ -240,14 +240,19 @@ A 16 MiB frame cap applies, and the relay bounds inbound message size.
 
 ### GUI
 
-Qt Widgets chat client with a "Key Exchange" dock panel that renders the
-handshake as ordered steps — identity unlocked, Kyber keypair generated,
-anonymous hello, encapsulation/decapsulation, identity unsealed, signature
-verified, HKDF derivation, key confirmation, peer pinned — each driven by a real
-engine observer callback rather than a simulated timeline. The panel reports only
-public values (algorithm names, byte counts, fingerprints); key material is never
-exposed to it. Peer fingerprints are shown prominently, with distinct first-use
-and mismatch states.
+Qt Widgets chat client with a "Connection" dock panel showing connection state
+(`Disconnected` / `Connecting…` / `Connected — secure channel established`),
+driven by a real engine observer callback rather than a simulated timeline.
+
+Peer verification is shown prominently, since it is the actual security boundary:
+your own and the peer's fingerprint, a first-use banner instructing the user to
+verify out of band, and an unmissable red alert if a pinned fingerprint ever
+changes (the connection is aborted in that case). The panel only ever receives
+public values — fingerprints and algorithm metadata — never key material.
+
+The engine exposes an optional `HandshakeObserverFn` reporting real handshake
+milestones, so a more detailed visualization can be rebuilt without touching the
+protocol code.
 
 ## Security properties and limitations
 
@@ -256,7 +261,7 @@ and mismatch states.
 - Connection timing, message timing and cadence, and the number of frames.
 - Which size *bucket* each frame fell into (not the true plaintext length).
 - Source IP addresses.
-- That Kyber-512 is in use, inferable from key and ciphertext lengths.
+- That ML-KEM-512 is in use, inferable from key and ciphertext lengths.
 
 **Known limitations**
 
@@ -272,9 +277,9 @@ and mismatch states.
 - **TOFU is trust-on-first-use.** Pins are scoped per relay-host#room (CLI) or per
   username (GUI), not by a verified global identity directory. First-use
   fingerprints must be compared out of band.
-- **Kyber-512 is NIST security level 1.** This is a KEM+AEAD hybrid (asymmetric
+- **ML-KEM-512 is NIST security level 1.** This is a KEM+AEAD hybrid (asymmetric
   KEM plus symmetric AEAD) — it is *not* a PQC+classical hybrid combiner; there
-  is no X25519/ECDH alongside Kyber.
+  is no X25519/ECDH alongside ML-KEM.
 - **The relay performs no admission control.** Anyone holding the token can join
   a room, and participant counts are not capped.
 - **Testing is one integration binary, and there is no CI.**
@@ -306,7 +311,7 @@ For TLS, put Caddy in front of the relay (`deploy/Caddyfile`) and connect with a
 connection_engine.*   handshake, sealed-sender message layer, file transfer
 session.h             directional keys, sequence counters
 crypto.h              AES-256-GCM helper
-hkdf.*, kem_kyber.*   HKDF-SHA256, Kyber-512 via liboqs
+hkdf.*, kem_kyber.*   HKDF-SHA256, ML-KEM-512 (FIPS 203) via liboqs
 identity.*            Ed25519 keystore (PBKDF2 + AES-GCM)
 pin_store.*           shared TOFU fingerprint store
 room_token.h          opaque relay room token derivation

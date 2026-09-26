@@ -1,4 +1,4 @@
-// Derive cryptographic keys(32 byte AES) from master(kyber). 
+// Derive cryptographic keys (32-byte AES) from the ML-KEM shared secret.
 
 #pragma once
 #include <vector>

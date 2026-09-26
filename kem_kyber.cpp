@@ -13,9 +13,15 @@ KyberKEM::~KyberKEM() {
 }
 
 void KyberKEM::init() {
-  // Classic name used by liboqs; if your version prefers ML-KEM names, adjust here.
-  kem_ = OQS_KEM_new(OQS_KEM_alg_kyber_512);
-  if (!kem_) throw std::runtime_error("OQS_KEM_new kyber_512 failed");
+  // ML-KEM-512 (FIPS 203), the NIST-standardized form of CRYSTALS-Kyber. This is
+  // a DIFFERENT algorithm from liboqs' OQS_KEM_alg_kyber_512, which is the
+  // superseded Round 3 draft: the two differ in key-generation domain separation
+  // and hashing and are not interchangeable on the wire. Key and ciphertext sizes
+  // happen to match (800/768/32 bytes), and every length below is queried from
+  // liboqs rather than hardcoded, so the parameter set can change safely.
+  // The Kyber* type names are retained for source continuity.
+  kem_ = OQS_KEM_new(OQS_KEM_alg_ml_kem_512);
+  if (!kem_) throw std::runtime_error("OQS_KEM_new ml_kem_512 failed");
 }
 
 size_t KyberKEM::pk_len() const { return kem_->length_public_key; }
