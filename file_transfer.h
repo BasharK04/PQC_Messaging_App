@@ -16,9 +16,15 @@
 #include <openssl/evp.h>
 #include <openssl/params.h>
 
-// 256 KiB plaintext chunk size. Each encrypted chunk (chunk + 16-byte tag, plus
-// protobuf/envelope overhead) stays far below the 16 MiB transport frame cap.
-inline constexpr std::size_t kFileChunkBytes = 256 * 1024;
+// File chunk payload size, deliberately 1 KiB BELOW the 256 KiB length-padding
+// bucket (see kPadBuckets in connection_engine.cpp) rather than equal to it.
+// The AEAD plaintext is [4-byte length][InnerMessage][padding], and InnerMessage
+// wraps the chunk with ~50 bytes of protobuf field and metadata overhead. A full
+// 256 KiB chunk therefore frames to just OVER the 256 KiB bucket and rounds up to
+// the next multiple (512 KiB) -- padding every chunk to exactly twice its size and
+// doubling the bytes on the wire. The 1 KiB of headroom keeps a full chunk inside
+// the 256 KiB bucket, cutting file-transfer overhead from ~100% to well under 1%.
+inline constexpr std::size_t kFileChunkBytes = 256 * 1024 - 1024;
 
 // Streaming HMAC-SHA256 over the OpenSSL 3 EVP_MAC API (no deprecated HMAC_CTX,
 // so the build stays warning-clean). update() may be called many times; final()
