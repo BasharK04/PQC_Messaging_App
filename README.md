@@ -5,7 +5,7 @@ post-quantum key exchange. Peers authenticate each other with Ed25519, agree on
 keys with ML-KEM-768, and talk through a relay that never sees plaintext — and
 never sees who is talking to whom either.
 
-Not audited software. See
+Please see before using:
 [Security properties and limitations](#security-properties-and-limitations).
 
 ## Features
