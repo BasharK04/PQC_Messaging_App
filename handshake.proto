@@ -7,7 +7,7 @@ syntax = "proto3";
 // relay/observer learn who was talking to whom.
 message HandshakeHello {
   uint32 version        = 1;   // protocol::kVersion
-  bytes  kem_public_key = 2;   // ML-KEM-512 encapsulation (public) key
+  bytes  kem_public_key = 2;   // ML-KEM-768 encapsulation (public) key
   reserved 3, 4;
   reserved "identity_pub", "identity_sig";
 }
@@ -21,7 +21,7 @@ message HandshakeHello {
 // confirmation MAC in cleartext.
 message HandshakeResponse {
   uint32 version        = 1;   // protocol::kVersion
-  bytes  kem_ciphertext = 2;   // ML-KEM-512 ciphertext
+  bytes  kem_ciphertext = 2;   // ML-KEM-768 ciphertext
   reserved 3, 4, 5;
   reserved "identity_pub", "identity_sig", "confirm";
   bytes sealed_nonce    = 6;   // 12-byte AES-256-GCM nonce for sealed_identity

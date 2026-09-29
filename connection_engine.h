@@ -28,7 +28,7 @@ struct HandshakeStep {
     KeysDerived, ConfirmVerified, Complete
   };
   Id id;
-  std::string detail;   // short human-readable, e.g. "ML-KEM-512 public key: 800 bytes"
+  std::string detail;   // short human-readable, e.g. "ML-KEM-768 public key: 1184 bytes"
   uint64_t bytes = 0;   // 0 when not applicable
 };
 using HandshakeObserverFn = std::function<void(const HandshakeStep&)>;

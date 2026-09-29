@@ -5,14 +5,14 @@
 // Forward-declare OQS type to avoid leaking headers here
 struct OQS_KEM;
 
-// Wrapper over liboqs ML-KEM-512 (FIPS 203), the standardized CRYSTALS-Kyber.
+// Wrapper over liboqs ML-KEM-768 (FIPS 203), the standardized CRYSTALS-Kyber.
 // Type name kept as KyberKEM for source continuity.
 class KyberKEM {
 public:
   KyberKEM();
   ~KyberKEM();
 
-  // create an ML-KEM-512 (FIPS 203) KEM instance
+  // create an ML-KEM-768 (FIPS 203) KEM instance
   void init();
 
   // sizes

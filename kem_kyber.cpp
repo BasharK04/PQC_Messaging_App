@@ -13,15 +13,22 @@ KyberKEM::~KyberKEM() {
 }
 
 void KyberKEM::init() {
-  // ML-KEM-512 (FIPS 203), the NIST-standardized form of CRYSTALS-Kyber. This is
-  // a DIFFERENT algorithm from liboqs' OQS_KEM_alg_kyber_512, which is the
-  // superseded Round 3 draft: the two differ in key-generation domain separation
-  // and hashing and are not interchangeable on the wire. Key and ciphertext sizes
-  // happen to match (800/768/32 bytes), and every length below is queried from
-  // liboqs rather than hardcoded, so the parameter set can change safely.
+  // ML-KEM-768 (FIPS 203), the NIST-standardized form of CRYSTALS-Kyber. Note
+  // this is a DIFFERENT algorithm from liboqs' OQS_KEM_alg_kyber_768, which is
+  // the superseded Round 3 draft: the two differ in key-generation domain
+  // separation and hashing and are not interchangeable on the wire.
+  //
+  // 768 targets NIST security category 3 and is the parameter set deployed in
+  // practice (TLS hybrids, Signal's PQXDH), rather than the category-1 512 set.
+  // It also balances the KEM against the AES-256-GCM data layer instead of
+  // leaving key establishment as the weaker link.
+  //
+  // Sizes are 1184-byte encapsulation key / 1088-byte ciphertext / 32-byte
+  // shared secret, but every length below is queried from liboqs rather than
+  // hardcoded, so the parameter set can be changed here alone.
   // The Kyber* type names are retained for source continuity.
-  kem_ = OQS_KEM_new(OQS_KEM_alg_ml_kem_512);
-  if (!kem_) throw std::runtime_error("OQS_KEM_new ml_kem_512 failed");
+  kem_ = OQS_KEM_new(OQS_KEM_alg_ml_kem_768);
+  if (!kem_) throw std::runtime_error("OQS_KEM_new ml_kem_768 failed");
 }
 
 size_t KyberKEM::pk_len() const { return kem_->length_public_key; }
